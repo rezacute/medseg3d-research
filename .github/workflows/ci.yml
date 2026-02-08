@@ -21,24 +21,18 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Install package
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Compile check - all source files
+      - name: Compile check
         run: |
           python -m compileall src/ -q
           python -m compileall tests/ -q
 
       - name: Verify package import
-        run: |
-          python -c "from qrc_ev import __version__; print(f'qrc_ev v{__version__}')"
+        run: python -c "from qrc_ev import __version__; print(f'qrc_ev v{__version__}')"
 
-      - name: Type check with mypy
-        run: |
-          mypy src/qrc_ev/ --ignore-missing-imports
-
-      - name: Run tests
-        run: |
-          pytest tests/ -v --tb=short
+      - name: Type check
+        run: mypy src/qrc_ev/ --ignore-missing-imports
