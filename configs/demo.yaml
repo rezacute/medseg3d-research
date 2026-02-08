@@ -1,0 +1,29 @@
+# Demo configuration for QRC-EV
+# This demonstrates the configuration system with all required fields
+
+experiment:
+  name: demo_experiment
+  seeds: [42, 43, 44]
+  metrics: [rmse, r2, mae]
+
+quantum_model:
+  arch: standard
+  n_qubits: 8
+  n_layers: 4
+  evolution_steps: 1
+  encoding: angle
+  observables: pauli_z
+
+backend:
+  name: pennylane
+  device: default.qubit
+  shots: 0
+
+data:
+  dataset: synthetic
+  resolution: 1h
+  window_size: 24
+  forecast_horizon: 1
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15
