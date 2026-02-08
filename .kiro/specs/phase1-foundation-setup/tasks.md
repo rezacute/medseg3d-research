@@ -67,26 +67,26 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
     - **Property 6: Reservoir reset restores initial state**
     - **Validates: Requirements 5.7**
 
-- [ ] 8. Configuration system
-  - [ ] 8.1 Create `src/qrc_ev/utils/config.py` with dataclasses (`ExperimentConfig`, `QuantumModelConfig`, `BackendConfig`, `DataConfig`, `QRCConfig`), custom `ConfigError` exception, `load_config(path)` with YAML parsing and `extends` inheritance support, `dump_config(config)` for serialization, and validation for required/unknown fields
+- [x] 8. Configuration system
+  - [x] 8.1 Create `src/qrc_ev/utils/config.py` with dataclasses (`ExperimentConfig`, `QuantumModelConfig`, `BackendConfig`, `DataConfig`, `QRCConfig`), custom `ConfigError` exception, `load_config(path)` with YAML parsing and `extends` inheritance support, `dump_config(config)` for serialization, and validation for required/unknown fields
     - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7_
-  - [ ]* 8.2 Write property test for configuration round-trip
+  - [x] 8.2 Write property test for configuration round-trip
     - **Property 9: Configuration round-trip**
     - **Validates: Requirements 8.7**
-  - [ ]* 8.3 Write property test for configuration inheritance
+  - [x] 8.3 Write property test for configuration inheritance
     - **Property 10: Configuration inheritance merge**
     - **Validates: Requirements 8.2**
-  - [ ]* 8.4 Write property test for invalid configuration rejection
+  - [x] 8.4 Write property test for invalid configuration rejection
     - **Property 11: Invalid configuration raises ConfigError**
     - **Validates: Requirements 8.3, 8.4**
 
 - [ ] 9. Seed management
   - [ ] 9.1 Create `src/qrc_ev/utils/seed.py` with `SeedManager`: `__init__(global_seed)` auto-generates if None and logs, `seed_all()` seeds Python random + NumPy, `derive_seed(component)` uses SHA-256 hash for deterministic child seeds
     - _Requirements: 9.1, 9.2, 9.3, 9.4_
-  - [ ]* 9.2 Write property test for seed reproducibility
+  - [ ] 9.2 Write property test for seed reproducibility
     - **Property 12: Seed reproducibility — reservoir outputs**
     - **Validates: Requirements 9.2, 15.2**
-  - [ ]* 9.3 Write property test for seed derivation distinctness
+  - [ ] 9.3 Write property test for seed derivation distinctness
     - **Property 13: Seed derivation produces distinct child seeds**
     - **Validates: Requirements 9.3**
 

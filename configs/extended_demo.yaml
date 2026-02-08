@@ -1,0 +1,20 @@
+# Extended configuration demonstrating inheritance
+# This config extends base.yaml and overrides specific values
+
+extends: base.yaml
+
+experiment:
+  name: extended_experiment
+  seeds: [100, 101, 102]
+  # metrics inherited from base
+
+quantum_model:
+  n_qubits: 8  # Override: increase qubits
+  n_layers: 4  # Override: increase layers
+  # Other fields inherited from base
+
+backend:
+  device: lightning.qubit  # Override: use faster device
+  # name and shots inherited from base
+
+# data section fully inherited from base
