@@ -6,12 +6,12 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
 
 ## Tasks
 
-- [ ] 1. Project scaffolding and package structure
-  - [ ] 1.1 Create `pyproject.toml` with package metadata, Python ≥3.10, dependencies (pennylane, numpy, scipy, scikit-learn, pyyaml, hypothesis), dev dependencies (pytest, pytest-cov, mypy, black, isort), and pytest configuration
+- [x] 1. Project scaffolding and package structure
+  - [x] 1.1 Create `pyproject.toml` with package metadata, Python ≥3.10, dependencies (pennylane, numpy, scipy, scikit-learn, pyyaml, hypothesis), dev dependencies (pytest, pytest-cov, mypy, black, isort), and pytest configuration
     - _Requirements: 1.1, 11.1_
-  - [ ] 1.2 Create `src/qrc_ev/__init__.py` with `__version__` attribute and subpackage `__init__.py` files for `backends`, `encoding`, `reservoirs`, `readout`, `baselines`, `training`, `utils`, and `data`
+  - [x] 1.2 Create `src/qrc_ev/__init__.py` with `__version__` attribute and subpackage `__init__.py` files for `backends`, `encoding`, `reservoirs`, `readout`, `baselines`, `training`, `utils`, and `data`
     - _Requirements: 1.2, 1.4_
-  - [ ] 1.3 Create `tests/conftest.py` with shared fixtures for backend instances, sample configs, and seed values
+  - [x] 1.3 Create `tests/conftest.py` with shared fixtures for backend instances, sample configs, and seed values
     - _Requirements: 11.1_
 
 - [ ] 2. Backend abstraction layer
