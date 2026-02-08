@@ -42,10 +42,10 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
     - **Property 2: Angle encoding rejects oversized input**
     - **Validates: Requirements 4.2**
 
-- [ ] 5. Pauli-Z observables and ridge readout
-  - [ ] 5.1 Create `src/qrc_ev/readout/observables.py` with `pauli_z_observables(n_qubits)` returning PennyLane observable list for single-qubit Z expectations
+- [x] 5. Pauli-Z observables and ridge readout
+  - [x] 5.1 Create `src/qrc_ev/readout/observables.py` with `pauli_z_observables(n_qubits)` returning PennyLane observable list for single-qubit Z expectations
     - _Requirements: 6.1, 6.2, 6.3_
-  - [ ] 5.2 Create `src/qrc_ev/readout/ridge.py` with `RidgeReadout` class: `__init__(alpha)`, `fit(features, targets)` using closed-form `(XᵀX + αI)⁻¹Xᵀy`, `predict(features)` returning `X @ W`, with `ValueError` on dimension mismatch and `RuntimeError` on predict-before-fit
+  - [x] 5.2 Create `src/qrc_ev/readout/ridge.py` with `RidgeReadout` class: `__init__(alpha)`, `fit(features, targets)` using closed-form `(XᵀX + αI)⁻¹Xᵀy`, `predict(features)` returning `X @ W`, with `ValueError` on dimension mismatch and `RuntimeError` on predict-before-fit
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
   - [ ]* 5.3 Write property test for ridge regression correctness
     - **Property 7: Ridge regression solves regularized least squares**
