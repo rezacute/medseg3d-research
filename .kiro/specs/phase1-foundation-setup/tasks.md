@@ -80,13 +80,13 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
     - **Property 11: Invalid configuration raises ConfigError**
     - **Validates: Requirements 8.3, 8.4**
 
-- [ ] 9. Seed management
-  - [ ] 9.1 Create `src/qrc_ev/utils/seed.py` with `SeedManager`: `__init__(global_seed)` auto-generates if None and logs, `seed_all()` seeds Python random + NumPy, `derive_seed(component)` uses SHA-256 hash for deterministic child seeds
+- [x] 9. Seed management
+  - [x] 9.1 Create `src/qrc_ev/utils/seed.py` with `SeedManager`: `__init__(global_seed)` auto-generates if None and logs, `seed_all()` seeds Python random + NumPy, `derive_seed(component)` uses SHA-256 hash for deterministic child seeds
     - _Requirements: 9.1, 9.2, 9.3, 9.4_
-  - [ ] 9.2 Write property test for seed reproducibility
+  - [x] 9.2 Write property test for seed reproducibility
     - **Property 12: Seed reproducibility — reservoir outputs**
     - **Validates: Requirements 9.2, 15.2**
-  - [ ] 9.3 Write property test for seed derivation distinctness
+  - [x] 9.3 Write property test for seed derivation distinctness
     - **Property 13: Seed derivation produces distinct child seeds**
     - **Validates: Requirements 9.3**
 
