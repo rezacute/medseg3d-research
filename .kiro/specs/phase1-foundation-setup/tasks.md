@@ -32,13 +32,13 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
   - [x] 3.4 Create `src/qrc_ev/utils/check_backends.py` backend verification script that confirms PennyLane is installed and can execute a simple circuit
     - _Requirements: 11.2_
 
-- [ ] 4. Angle encoding
-  - [ ] 4.1 Create `src/qrc_ev/encoding/angle.py` with `angle_encode(data, n_qubits)` function that applies `Ry(π × xᵢ)` to qubit i, raises `ValueError` when `d > n_qubits`, and leaves unused qubits in |0⟩
+- [x] 4. Angle encoding
+  - [x] 4.1 Create `src/qrc_ev/encoding/angle.py` with `angle_encode(data, n_qubits)` function that applies `Ry(π × xᵢ)` to qubit i, raises `ValueError` when `d > n_qubits`, and leaves unused qubits in |0⟩
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
-  - [ ]* 4.2 Write property test for angle encoding correctness
+  - [x] 4.2 Write property test for angle encoding correctness
     - **Property 1: Angle encoding produces correct quantum state**
     - **Validates: Requirements 4.1, 4.3, 4.4**
-  - [ ]* 4.3 Write property test for angle encoding rejection of oversized input
+  - [x] 4.3 Write property test for angle encoding rejection of oversized input
     - **Property 2: Angle encoding rejects oversized input**
     - **Validates: Requirements 4.2**
 
