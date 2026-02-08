@@ -61,7 +61,7 @@ class TestPreprocessorUnit:
 
     def test_handle_missing_gap_detection(self, preprocessor, caplog):
         """Test logging of large gaps (Req 12.2)."""
-        series = pd.Series([1.0, np.nan, np.nan, np.nan, 4.0], index=pd.date_range("2023-01-01", periods=5, freq="H"))
+        series = pd.Series([1.0, np.nan, np.nan, np.nan, 4.0], index=pd.date_range("2023-01-01", periods=5, freq="h"))
         
         with caplog.at_level("WARNING"):
             preprocessor.handle_missing(series, max_gap=2)
