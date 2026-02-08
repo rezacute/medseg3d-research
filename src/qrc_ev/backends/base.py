@@ -115,6 +115,16 @@ class QuantumReservoir(ABC):
     """
 
     @abstractmethod
+    def __init__(self, backend: QuantumBackend, **kwargs: Any) -> None:
+        """Initialize the quantum reservoir with a backend.
+
+        Args:
+            backend: Quantum backend for circuit execution.
+            **kwargs: Additional reservoir-specific parameters.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def encode(self, x: np.ndarray) -> None:
         """Encode input data into the quantum state.
 
