@@ -1,0 +1,53 @@
+{
+  "id": "qrc-ev",
+  "name": "QRC-EV Research",
+  "version": "1.0.0",
+  "description": "Plugin for Quantum Reservoir Computing experiments on EV charging demand forecasting. Provides slash commands and CLI tools for running experiments, benchmarks, and ablation studies.",
+  "author": "QRC-EV Research Team",
+  "license": "Apache-2.0",
+  "main": "./qrc-ev-plugin.ts",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "defaultBackend": {
+        "type": "string",
+        "description": "Default quantum backend for experiments",
+        "default": "pennylane",
+        "enum": ["pennylane", "qiskit", "cudaq"]
+      },
+      "defaultDevice": {
+        "type": "string",
+        "description": "Default device for the selected backend",
+        "default": "lightning.qubit"
+      },
+      "workspacePath": {
+        "type": "string",
+        "description": "Path to QRC-EV research workspace"
+      },
+      "autoDataPath": {
+        "type": "string",
+        "description": "Path for storing downloaded datasets",
+        "default": "data/raw/"
+      }
+    }
+  },
+  "uiHints": {
+    "workspacePath": {
+      "label": "Workspace Path",
+      "placeholder": "/path/to/qrc-ev-research"
+    },
+    "defaultBackend": {
+      "label": "Default Quantum Backend",
+      "placeholder": "pennylane"
+    },
+    "defaultDevice": {
+      "label": "Default Device",
+      "placeholder": "lightning.qubit"
+    }
+  },
+  "skills": [],
+  "openclaw": {
+    "extensions": ["./qrc-ev-plugin.ts"]
+  }
+}
