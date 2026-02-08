@@ -93,19 +93,19 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
 - [ ] 10. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Data preprocessing pipeline
-  - [ ] 11.1 Create `src/qrc_ev/data/preprocessor.py` with `Preprocessor` class: `aggregate_sessions` (session→time bins), `handle_missing` (forward-fill + gap detection), `clip_outliers` (±3σ clipping), `split_chronological` (train/val/test by ratio), `fit_normalize` (min-max on train only), `normalize` (apply + clip to [0,1]), `create_windows` (sliding window X,y pairs)
+- [x] 11. Data preprocessing pipeline
+  - [x] 11.1 Create `src/qrc_ev/data/preprocessor.py` with `Preprocessor` class: `aggregate_sessions` (session→time bins), `handle_missing` (forward-fill + gap detection), `clip_outliers` (±3σ clipping), `split_chronological` (train/val/test by ratio), `fit_normalize` (min-max on train only), `normalize` (apply + clip to [0,1]), `create_windows` (sliding window X,y pairs)
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8_
-  - [ ]* 11.2 Write property test for outlier clipping invariant
+  - [x]* 11.2 Write property test for outlier clipping invariant
     - **Property 14: Outlier clipping invariant**
     - **Validates: Requirements 12.3**
-  - [ ]* 11.3 Write property test for chronological split
+  - [x]* 11.3 Write property test for chronological split
     - **Property 15: Chronological split preserves order and ratios**
     - **Validates: Requirements 12.4**
-  - [ ]* 11.4 Write property test for normalization output range
+  - [x]* 11.4 Write property test for normalization output range
     - **Property 16: Normalization output range invariant**
     - **Validates: Requirements 12.5, 12.6, 12.8**
-  - [ ]* 11.5 Write property test for windowed sample shapes
+  - [x]* 11.5 Write property test for windowed sample shapes
     - **Property 17: Windowed sample shapes**
     - **Validates: Requirements 12.7**
 
