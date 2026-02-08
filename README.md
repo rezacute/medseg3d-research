@@ -207,6 +207,7 @@ qrc-ev-research/
     ├── PRD.md
     ├── CONTRIBUTING.md
     ├── DATA_GUIDE.md
+    ├── datasets.md                      # Detailed dataset documentation
     └── HARDWARE_GUIDE.md
 ```
 
@@ -214,27 +215,28 @@ qrc-ev-research/
 
 ## Datasets
 
+For detailed information on accessing and using these datasets, see [**docs/datasets.md**](docs/datasets.md).
+
 ### Primary Datasets
 
-| Dataset | Records | Stations | Timespan | Resolution | Source |
-|---------|---------|----------|----------|------------|--------|
-| **ACN-Data** (Caltech) | 30,000+ sessions | 55 EVSEs | 2018–present | ~5-min power | [ev.caltech.edu](https://ev.caltech.edu/dataset) |
-| **UrbanEV** (Shenzhen) | 24,798 piles | 1,682 stations | Sep 2022–Feb 2023 | Hourly | [GitHub](https://github.com/IntelligentSystemsLab/UrbanEV) |
-| **Palo Alto** Open Data | 259,415 sessions | 47 stations | Jul 2011–Dec 2020 | Per-session | [data.cityofpaloalto.org](https://data.cityofpaloalto.org/) |
+| Dataset | Records | Stations | Timespan | Resolution | Source | Status |
+|---------|---------|----------|----------|------------|--------|--------|
+| **ACN-Data** (Caltech) | 30,000+ sessions | 55 EVSEs | 2018–present | ~5-min power | [ev.caltech.edu](https://ev.caltech.edu/dataset) | Requires Token |
+| **UrbanEV** (Shenzhen) | 24,798 piles | 1,682 stations | Sep 2022–Feb 2023 | Hourly | [GitHub](https://github.com/IntelligentSystemsLab/UrbanEV) | Automatic |
+| **Palo Alto** Open Data | 259,415 sessions | 47 stations | Jul 2011–Dec 2020 | Per-session | [data.paloalto.gov](https://data.paloalto.gov/) | Automatic |
 
 ### Exogenous Data
 
-| Dataset | Granularity | Source |
-|---------|-------------|--------|
-| IEA Global EV Data Explorer | Annual, 40+ countries | [iea.org](https://www.iea.org/data-and-statistics/data-tools/global-ev-data-explorer) |
-| Argonne Monthly EV Sales | Monthly, US national | [anl.gov](https://www.anl.gov/esia/light-duty-electric-drive-vehicles-monthly-sales-updates) |
-| AFDC EV Registrations | Annual, US by state | [afdc.energy.gov](https://afdc.energy.gov/vehicle-registration) |
-| CAISO Day-Ahead LMP | 5-min, California | [oasis.caiso.com](https://oasis.caiso.com/) |
-| ERCOT Settlement Prices | 15-min, Texas | [ercot.com](https://www.ercot.com/mktinfo/prices) |
+| Dataset | Granularity | Source | Status |
+|---------|-------------|--------|--------|
+| Argonne Monthly EV Sales | Monthly, US national | [anl.gov](https://www.anl.gov/) (via AFDC) | Automatic |
+| IEA Global EV Data | Annual, 40+ countries | [iea.org](https://www.iea.org/) | Manual |
+| AFDC EV Registrations | Annual, US by state | [afdc.energy.gov](https://afdc.energy.gov/) | Manual |
+| CAISO LMP & ERCOT | 5-15 min, CA/TX | OASIS / ERCOT | Manual |
 
 ```bash
-# Download all datasets (~2.5 GB)
-python scripts/download_data.py --all --output-dir data/raw/
+# Download supported datasets (ACN requires token)
+python scripts/download_data.py --datasets urban paloalto argonne --output-dir data/raw/
 ```
 
 ---

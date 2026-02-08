@@ -93,42 +93,42 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
 - [ ] 10. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 11. Data preprocessing pipeline
-  - [ ] 11.1 Create `src/qrc_ev/data/preprocessor.py` with `Preprocessor` class: `aggregate_sessions` (session→time bins), `handle_missing` (forward-fill + gap detection), `clip_outliers` (±3σ clipping), `split_chronological` (train/val/test by ratio), `fit_normalize` (min-max on train only), `normalize` (apply + clip to [0,1]), `create_windows` (sliding window X,y pairs)
+- [x] 11. Data preprocessing pipeline
+  - [x] 11.1 Create `src/qrc_ev/data/preprocessor.py` with `Preprocessor` class: `aggregate_sessions` (session→time bins), `handle_missing` (forward-fill + gap detection), `clip_outliers` (±3σ clipping), `split_chronological` (train/val/test by ratio), `fit_normalize` (min-max on train only), `normalize` (apply + clip to [0,1]), `create_windows` (sliding window X,y pairs)
     - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8_
-  - [ ]* 11.2 Write property test for outlier clipping invariant
+  - [x]* 11.2 Write property test for outlier clipping invariant
     - **Property 14: Outlier clipping invariant**
     - **Validates: Requirements 12.3**
-  - [ ]* 11.3 Write property test for chronological split
+  - [x]* 11.3 Write property test for chronological split
     - **Property 15: Chronological split preserves order and ratios**
     - **Validates: Requirements 12.4**
-  - [ ]* 11.4 Write property test for normalization output range
+  - [x]* 11.4 Write property test for normalization output range
     - **Property 16: Normalization output range invariant**
     - **Validates: Requirements 12.5, 12.6, 12.8**
-  - [ ]* 11.5 Write property test for windowed sample shapes
+  - [x]* 11.5 Write property test for windowed sample shapes
     - **Property 17: Windowed sample shapes**
     - **Validates: Requirements 12.7**
 
-- [ ] 12. Feature engineering
-  - [ ] 12.1 Create `src/qrc_ev/data/feature_engineer.py` with `FeatureEngineer` class: `add_temporal_features` (sin/cos hour + day-of-week), `add_lag_features` (configurable lag steps), `engineer` (full pipeline returning (T, d)), `feature_dim` property
+- [x] 12. Feature engineering
+  - [x] 12.1 Create `src/qrc_ev/data/feature_engineer.py` with `FeatureEngineer` class: `add_temporal_features` (sin/cos hour + day-of-week), `add_lag_features` (configurable lag steps), `engineer` (full pipeline returning (T, d)), `feature_dim` property
     - _Requirements: 13.1, 13.2, 13.3, 13.4_
-  - [ ]* 12.2 Write property test for temporal feature bounds
+  - [x]* 12.2 Write property test for temporal feature bounds
     - **Property 18: Temporal features bounded in [-1, 1]**
     - **Validates: Requirements 13.1**
-  - [ ]* 12.3 Write property test for lag feature correctness
+  - [x]* 12.3 Write property test for lag feature correctness
     - **Property 19: Lag feature correctness**
     - **Validates: Requirements 13.2**
-  - [ ]* 12.4 Write property test for feature dimension consistency
+  - [x]* 12.4 Write property test for feature dimension consistency
     - **Property 20: Feature dimension consistency**
     - **Validates: Requirements 13.3, 13.4**
 
-- [ ] 13. Synthetic data generation
-  - [ ] 13.1 Create `src/qrc_ev/data/synthetic.py` with `SyntheticGenerator` class: `sinusoidal` (configurable amplitude/frequency/noise/length), `ev_charging_pattern` (daily morning+evening peaks, weekday/weekend variation), both returning (features (T,d), targets (T,))
+- [x] 13. Synthetic data generation
+  - [x] 13.1 Create `src/qrc_ev/data/synthetic.py` with `SyntheticGenerator` class: `sinusoidal` (configurable amplitude/frequency/noise/length), `ev_charging_pattern` (daily morning+evening peaks, weekday/weekend variation), both returning (features (T,d), targets (T,))
     - _Requirements: 14.1, 14.2, 14.3, 14.4_
-  - [ ]* 13.2 Write property test for synthetic data shape
+  - [x] 13.2 Write property test for synthetic data shape
     - **Property 21: Synthetic data shape and format**
     - **Validates: Requirements 14.1, 14.4**
-  - [ ]* 13.3 Write property test for synthetic data reproducibility
+  - [x] 13.3 Write property test for synthetic data reproducibility
     - **Property 22: Synthetic data reproducibility**
     - **Validates: Requirements 14.3**
 
