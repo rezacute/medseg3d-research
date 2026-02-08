@@ -5,12 +5,17 @@ Ising-type unitary for reservoir evolution, angle encoding for input, and
 Pauli-Z observables for feature extraction.
 """
 
+from typing import TYPE_CHECKING
+
 import numpy as np
 import pennylane as qml
 
 from qrc_ev.backends.base import QuantumBackend, QuantumReservoir, ReservoirParams
 from qrc_ev.encoding.angle import angle_encode
 from qrc_ev.readout.observables import pauli_z_observables
+
+if TYPE_CHECKING:
+    from qrc_ev.backends.pennylane_backend import PennyLaneBackend
 
 
 class StandardReservoir(QuantumReservoir):
@@ -30,7 +35,7 @@ class StandardReservoir(QuantumReservoir):
 
     def __init__(
         self,
-        backend: QuantumBackend,
+        backend: "PennyLaneBackend",
         n_qubits: int,
         n_layers: int = 4,
         evolution_steps: int = 1,
@@ -39,7 +44,7 @@ class StandardReservoir(QuantumReservoir):
         """Initialize the standard reservoir with fixed random parameters.
 
         Args:
-            backend: Quantum backend implementation (e.g., PennyLaneBackend).
+            backend: PennyLane backend implementation.
             n_qubits: Number of qubits in the reservoir.
             n_layers: Number of layers in the Ising unitary. Default: 4.
             evolution_steps: Number of unitary applications per timestep. Default: 1.
@@ -50,6 +55,8 @@ class StandardReservoir(QuantumReservoir):
         self.n_layers = n_layers
         self.evolution_steps = evolution_steps
         self.params = self._generate_fixed_params(seed)
+        self._current_input: np.ndarray | None = None
+        self._evolution_steps_override = evolution_steps
 
         # Initialize the backend device
         self.backend.create_circuit(n_qubits)
