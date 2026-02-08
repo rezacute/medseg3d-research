@@ -96,9 +96,10 @@ except Exception as e:
 # Step 4: Process time series through reservoir
 print("\nStep 4: Process time series through reservoir")
 try:
-    # Use first sequence_length timesteps
+    # Use first sequence_length timesteps from features (2D array: T, d)
     input_features = features[:sequence_length]
     print(f"  Input shape: {input_features.shape}")
+    print(f"  Input type: {type(input_features)}")
 
     reservoir_features = reservoir.process(input_features)
     print(f"✓ Reservoir processing complete")
@@ -112,9 +113,14 @@ except Exception as e:
 # Step 5: Train ridge regression readout
 print("\nStep 5: Train ridge regression")
 try:
-    # Prepare training data: use t-1 to predict t
+    # Prepare training data: use t-1 features to predict t
+    # X_train: reservoir features at timesteps 0 to T-1
+    # y_train: first feature of next timestep (univariate forecasting)
     X_train = reservoir_features[:-1]
-    y_train = input_features[1:, 0]  # Use first feature as target
+    y_train = input_features[1:, 0]  # Use first feature of next timestep as target
+
+    print(f"  X_train shape: {X_train.shape}")
+    print(f"  y_train shape: {y_train.shape}")
 
     readout = RidgeReadout(alpha=1.0)
     readout.fit(X_train, y_train)
@@ -130,6 +136,9 @@ try:
     print(f"  R²: {r2:.4f}")
 except Exception as e:
     print(f"✗ Failed: {e}")
+    import traceback
+    traceback.print_exc()
+    sys.exit(1)
     import traceback
     traceback.print_exc()
     sys.exit(1)
