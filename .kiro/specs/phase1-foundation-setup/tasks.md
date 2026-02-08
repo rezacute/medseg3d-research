@@ -54,11 +54,11 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
     - **Property 8: Ridge regression rejects mismatched dimensions**
     - **Validates: Requirements 7.4**
 
-- [ ] 6. Checkpoint - Ensure all tests pass
+- [x] 6. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. A1 Standard reservoir
-  - [ ] 7.1 Create `src/qrc_ev/reservoirs/standard.py` with `StandardReservoir(QuantumReservoir)`: `__init__` generates fixed random Ising params from seed, `encode` delegates to angle encoder, `evolve` applies reservoir unitary N steps, `measure` extracts Pauli-Z observables, `process(time_series)` loops encode→evolve→measure per timestep returning (T, n_qubits), `reset` restores |0⟩⊗ⁿ
+- [x] 7. A1 Standard reservoir
+  - [x] 7.1 Create `src/qrc_ev/reservoirs/standard.py` with `StandardReservoir(QuantumReservoir)`: `__init__` generates fixed random Ising params from seed, `encode` delegates to angle encoder, `evolve` applies reservoir unitary N steps, `measure` extracts Pauli-Z observables, `process(time_series)` loops encode→evolve→measure per timestep returning (T, n_qubits), `reset` restores |0⟩⊗ⁿ
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
   - [ ]* 7.2 Write property test for reservoir output shape
     - **Property 5: Reservoir process output shape invariant**
