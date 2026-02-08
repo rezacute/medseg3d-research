@@ -14,10 +14,10 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
   - [x] 1.3 Create `tests/conftest.py` with shared fixtures for backend instances, sample configs, and seed values
     - _Requirements: 11.1_
 
-- [ ] 2. Backend abstraction layer
-  - [ ] 2.1 Create `src/qrc_ev/backends/base.py` with `ReservoirParams` dataclass, `QuantumBackend` ABC (abstract methods: `create_circuit`, `apply_encoding`, `apply_reservoir`, `measure_observables`, `execute`), and `QuantumReservoir` ABC (abstract methods: `encode`, `evolve`, `measure`, `process`, `reset`)
+- [x] 2. Backend abstraction layer
+  - [x] 2.1 Create `src/qrc_ev/backends/base.py` with `ReservoirParams` dataclass, `QuantumBackend` ABC (abstract methods: `create_circuit`, `apply_encoding`, `apply_reservoir`, `measure_observables`, `execute`), and `QuantumReservoir` ABC (abstract methods: `encode`, `evolve`, `measure`, `process`, `reset`)
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
-  - [ ]* 2.2 Write unit tests in `tests/test_backends/test_base.py` verifying ABC contract: direct instantiation raises `TypeError`, and calling abstract methods on a minimal subclass raises `NotImplementedError`
+  - [x] 2.2 Write unit tests in `tests/test_backends/test_base.py` verifying ABC contract: direct instantiation raises `TypeError`, and calling abstract methods on a minimal subclass raises `NotImplementedError`
     - _Requirements: 2.3_
 
 - [ ] 3. PennyLane backend implementation
