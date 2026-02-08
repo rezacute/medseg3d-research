@@ -1,4 +1,4 @@
-name: CI - Compile Check
+name: CI - Build & Test
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [main, develop]
 
 jobs:
-  compile-check:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -33,3 +33,13 @@ jobs:
 
       - name: Type check
         run: mypy src/qrc_ev/ --ignore-missing-imports
+
+      - name: Run tests
+        run: pytest tests/ -v --cov=src/qrc_ev --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
