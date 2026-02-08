@@ -112,7 +112,7 @@ class PennyLaneBackend(QuantumBackend):
 
         return circuit
 
-    def measure_observables(self, circuit: Any, obs_set: str = "pauli_z") -> np.ndarray:
+    def measure_observables(self, circuit: Any, obs_set: str = "pauli_z") -> list[Any]:
         """Extract Pauli-Z observable measurements from the circuit.
 
         Args:
@@ -157,7 +157,7 @@ class PennyLaneBackend(QuantumBackend):
 
     def create_qnode(
         self, circuit_func: Callable, interface: str = "numpy"
-    ) -> Callable:
+    ) -> qml.QNode:
         """Create a PennyLane QNode from a circuit function.
 
         This is a helper method for creating executable quantum circuits.

@@ -6,7 +6,7 @@ confirming that the environment is correctly configured.
 """
 
 import sys
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -27,7 +27,7 @@ def check_pennylane() -> Tuple[bool, str]:
         dev = qml.device("default.qubit", wires=2)
         
         @qml.qnode(dev)
-        def simple_circuit():
+        def simple_circuit() -> tuple:
             qml.Hadamard(wires=0)
             qml.CNOT(wires=[0, 1])
             return qml.expval(qml.PauliZ(0)), qml.expval(qml.PauliZ(1))
@@ -67,7 +67,7 @@ def check_lightning() -> Tuple[bool, str]:
         dev = qml.device("lightning.qubit", wires=2)
         
         @qml.qnode(dev)
-        def simple_circuit():
+        def simple_circuit() -> Any:
             qml.Hadamard(wires=0)
             return qml.expval(qml.PauliZ(0))
         
