@@ -7,7 +7,7 @@ and serialization for reproducible experiments.
 from dataclasses import dataclass, field, fields, asdict
 from pathlib import Path
 from typing import Any
-import yaml
+import yaml  # type: ignore
 
 
 class ConfigError(ValueError):
