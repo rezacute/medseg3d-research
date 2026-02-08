@@ -122,13 +122,13 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
     - **Property 20: Feature dimension consistency**
     - **Validates: Requirements 13.3, 13.4**
 
-- [ ] 13. Synthetic data generation
-  - [ ] 13.1 Create `src/qrc_ev/data/synthetic.py` with `SyntheticGenerator` class: `sinusoidal` (configurable amplitude/frequency/noise/length), `ev_charging_pattern` (daily morning+evening peaks, weekday/weekend variation), both returning (features (T,d), targets (T,))
+- [x] 13. Synthetic data generation
+  - [x] 13.1 Create `src/qrc_ev/data/synthetic.py` with `SyntheticGenerator` class: `sinusoidal` (configurable amplitude/frequency/noise/length), `ev_charging_pattern` (daily morning+evening peaks, weekday/weekend variation), both returning (features (T,d), targets (T,))
     - _Requirements: 14.1, 14.2, 14.3, 14.4_
-  - [ ]* 13.2 Write property test for synthetic data shape
+  - [x] 13.2 Write property test for synthetic data shape
     - **Property 21: Synthetic data shape and format**
     - **Validates: Requirements 14.1, 14.4**
-  - [ ]* 13.3 Write property test for synthetic data reproducibility
+  - [x] 13.3 Write property test for synthetic data reproducibility
     - **Property 22: Synthetic data reproducibility**
     - **Validates: Requirements 14.3**
 
