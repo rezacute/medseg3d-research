@@ -87,6 +87,92 @@ def check_lightning() -> Tuple[bool, str]:
         return False, f"Lightning: ✗ Error during execution: {str(e)}"
 
 
+def check_cudaq() -> Tuple[bool, str]:
+    """Verify CUDA-Quantum installation and basic functionality.
+
+    Returns:
+        Tuple of (success: bool, message: str) indicating whether CUDA-Q
+        is working correctly and a descriptive message.
+    """
+    try:
+        import cudaq
+        
+        version = getattr(cudaq, "__version__", "unknown")
+        
+        # Check available targets
+        available_targets = []
+        for target in ["nvidia", "nvidia-fp64", "nvidia-mgpu", "qpp-cpu"]:
+            try:
+                cudaq.set_target(target)
+                available_targets.append(target)
+            except Exception:
+                pass
+        
+        if not available_targets:
+            return False, f"CUDA-Q v{version}: ✗ No targets available"
+        
+        # Use the first available target
+        cudaq.set_target(available_targets[0])
+        
+        # Test basic circuit execution
+        @cudaq.kernel
+        def simple_circuit():
+            qubit = cudaq.qubit()
+            cudaq.h(qubit)
+            cudaq.mz(qubit)
+        
+        result = cudaq.sample(simple_circuit, shots_count=100)
+        
+        if result is None or len(result) == 0:
+            return False, f"CUDA-Q v{version}: ✗ Sample returned no results"
+        
+        targets_str = ", ".join(available_targets)
+        return True, f"CUDA-Q v{version}: ✓ Installed (targets: {targets_str})"
+    
+    except ImportError:
+        return False, "CUDA-Q: ✗ Not installed (pip install cuda-quantum)"
+    except Exception as e:
+        return False, f"CUDA-Q: ✗ Error during execution: {str(e)}"
+
+
+def check_cudaq_gpu() -> Tuple[bool, str]:
+    """Verify CUDA-Quantum GPU acceleration is available.
+
+    Returns:
+        Tuple of (success: bool, message: str) indicating whether GPU
+        acceleration is available.
+    """
+    try:
+        import cudaq
+        
+        # Try to set the nvidia target
+        cudaq.set_target("nvidia")
+        
+        # Quick test
+        @cudaq.kernel
+        def gpu_test():
+            qubit = cudaq.qubit()
+            cudaq.h(qubit)
+        
+        # Use observe to verify GPU execution
+        spin_op = cudaq.spin.z(0)
+        result = cudaq.observe(gpu_test, spin_op)
+        
+        exp_val = result.expectation()
+        if not -1.0 <= exp_val <= 1.0:
+            return False, f"CUDA-Q GPU: ✗ Invalid expectation value: {exp_val}"
+        
+        return True, "CUDA-Q GPU: ✓ NVIDIA GPU target functional"
+    
+    except ImportError:
+        return False, "CUDA-Q GPU: ✗ CUDA-Quantum not installed"
+    except Exception as e:
+        error_msg = str(e)
+        if "not available" in error_msg.lower() or "not found" in error_msg.lower():
+            return False, "CUDA-Q GPU: ✗ GPU target not available (no CUDA GPU?)"
+        return False, f"CUDA-Q GPU: ✗ Error: {error_msg}"
+
+
 def check_all_backends() -> Dict[str, Tuple[bool, str]]:
     """Check all available quantum backends.
 
@@ -96,6 +182,8 @@ def check_all_backends() -> Dict[str, Tuple[bool, str]]:
     results = {
         "pennylane": check_pennylane(),
         "lightning": check_lightning(),
+        "cudaq": check_cudaq(),
+        "cudaq_gpu": check_cudaq_gpu(),
     }
     return results
 
