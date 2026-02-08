@@ -132,17 +132,17 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
     - **Property 22: Synthetic data reproducibility**
     - **Validates: Requirements 14.3**
 
-- [ ] 14. Architecture factory
-  - [ ] 14.1 Create `src/qrc_ev/reservoirs/factory.py` with `_REGISTRY` dict mapping `"standard"` → `StandardReservoir`, and `create_reservoir(arch, backend, **kwargs)` that looks up the registry, raises `ValueError` for unknown names, and passes config params to constructor
+- [x] 14. Architecture factory
+  - [x] 14.1 Create `src/qrc_ev/reservoirs/factory.py` with `_REGISTRY` dict mapping `"standard"` → `StandardReservoir`, and `create_reservoir(arch, backend, **kwargs)` that looks up the registry, raises `ValueError` for unknown names, and passes config params to constructor
     - _Requirements: 10.1, 10.2, 10.3, 10.4_
-  - [ ]* 14.2 Write property test for factory rejection of unknown architectures
+  - [x] 14.2 Write property test for factory rejection of unknown architectures
     - **Property 23: Factory rejects unknown architectures**
     - **Validates: Requirements 10.2**
 
-- [ ] 15. End-to-end pipeline integration
-  - [ ] 15.1 Create `src/qrc_ev/training/trainer.py` with a `run_pipeline(config_path)` function that orchestrates: load config → seed all → create synthetic data → preprocess → create backend → create reservoir via factory → process features → fit ridge readout → predict → return predictions and metrics
+- [x] 15. End-to-end pipeline integration
+  - [x] 15.1 Create `src/qrc_ev/training/trainer.py` with a `run_pipeline(config_path)` function that orchestrates: load config → seed all → create synthetic data → preprocess → create backend → create reservoir via factory → process features → fit ridge readout → predict → return predictions and metrics
     - _Requirements: 15.1, 15.2, 15.3_
-  - [ ]* 15.2 Write integration test in `tests/test_integration/test_pipeline.py` verifying end-to-end pipeline runs with a sample YAML config, produces predictions, achieves R² > 0.0 on synthetic data, and is reproducible across two runs with the same seed
+  - [x] 15.2 Write integration test in `tests/test_integration/test_pipeline.py` verifying end-to-end pipeline runs with a sample YAML config, produces predictions, achieves R² > 0.0 on synthetic data, and is reproducible across two runs with the same seed
     - _Requirements: 15.1, 15.2, 15.3_
 
 - [ ] 16. Final checkpoint - Ensure all tests pass

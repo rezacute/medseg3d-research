@@ -98,11 +98,8 @@ class StandardReservoir(QuantumReservoir):
         Returns:
             NumPy array of Pauli-Z expectation values with shape (n_qubits,).
         """
-        dev = qml.device(
-            self.backend.device_name,
-            wires=self.n_qubits,
-            shots=self.backend.shots,
-        )
+        # Use the backend's device (already created with correct shots parameter)
+        dev = self.backend._device
 
         @qml.qnode(dev, interface="numpy")
         def circuit() -> list:
