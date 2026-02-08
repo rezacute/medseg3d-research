@@ -40,23 +40,34 @@
 conda create -n qrc-ev python=3.10 -y
 conda activate qrc-ev
 
-# Install dependencies
-pip install -r requirements.txt
-pip install -e .
+# Install package in editable mode with dev dependencies
+pip install -e ".[dev]"
 
-# Install quantum backends
+# Optional: Install additional quantum backends
 pip install qiskit[all]>=1.0 qiskit-ibm-runtime qiskit-aer
-pip install pennylane pennylane-qiskit
+pip install pennylane-qiskit
 pip install cuda-quantum  # Requires CUDA 12.x
 ```
 
-### Verification
+### Quick Start (Phase 1)
 ```bash
-# Verify backend installation
-python -m qrc_ev.utils.check_backends
+# Install package
+pip install -e ".[dev]"
+
+# Verify installation
+python -c "from qrc_ev import __version__; print(f'qrc_ev v{__version__}')"
+
+# Run tests
+pytest tests/ -v
+
+# Type check
+mypy src/qrc_ev/ --ignore-missing-imports
 ```
 
-### Running Experiments
+### Running Experiments (Future)
+
+> Note: These commands will be available after Phase 1 implementation is complete.
+
 ```bash
 # Quick demo
 python scripts/run_experiment.py \
@@ -83,7 +94,10 @@ python scripts/run_ablation.py \
     --seeds 10
 ```
 
-### Data Management
+### Data Management (Future)
+
+> Note: Data loaders will be implemented in Phase 4.
+
 ```bash
 # Download all datasets (~2.5 GB)
 python scripts/download_data.py --all --output-dir data/raw/

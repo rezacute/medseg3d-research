@@ -1,5 +1,13 @@
 # Project Structure
 
+## Current Implementation Status
+
+**Phase 1: Foundation Setup** (In Progress)
+- ✅ Task 1: Project scaffolding (pyproject.toml, package structure, CI)
+- ⏳ Task 2-16: Backend abstraction, encoding, reservoir, readout, config, data pipeline
+
+See `.kiro/specs/phase1-foundation-setup/tasks.md` for detailed task list.
+
 ## Directory Organization
 
 ```
