@@ -109,16 +109,16 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
     - **Property 17: Windowed sample shapes**
     - **Validates: Requirements 12.7**
 
-- [ ] 12. Feature engineering
-  - [ ] 12.1 Create `src/qrc_ev/data/feature_engineer.py` with `FeatureEngineer` class: `add_temporal_features` (sin/cos hour + day-of-week), `add_lag_features` (configurable lag steps), `engineer` (full pipeline returning (T, d)), `feature_dim` property
+- [x] 12. Feature engineering
+  - [x] 12.1 Create `src/qrc_ev/data/feature_engineer.py` with `FeatureEngineer` class: `add_temporal_features` (sin/cos hour + day-of-week), `add_lag_features` (configurable lag steps), `engineer` (full pipeline returning (T, d)), `feature_dim` property
     - _Requirements: 13.1, 13.2, 13.3, 13.4_
-  - [ ]* 12.2 Write property test for temporal feature bounds
+  - [x]* 12.2 Write property test for temporal feature bounds
     - **Property 18: Temporal features bounded in [-1, 1]**
     - **Validates: Requirements 13.1**
-  - [ ]* 12.3 Write property test for lag feature correctness
+  - [x]* 12.3 Write property test for lag feature correctness
     - **Property 19: Lag feature correctness**
     - **Validates: Requirements 13.2**
-  - [ ]* 12.4 Write property test for feature dimension consistency
+  - [x]* 12.4 Write property test for feature dimension consistency
     - **Property 20: Feature dimension consistency**
     - **Validates: Requirements 13.3, 13.4**
 
