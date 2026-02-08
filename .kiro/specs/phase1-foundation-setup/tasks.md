@@ -20,8 +20,8 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
   - [x] 2.2 Write unit tests in `tests/test_backends/test_base.py` verifying ABC contract: direct instantiation raises `TypeError`, and calling abstract methods on a minimal subclass raises `NotImplementedError`
     - _Requirements: 2.3_
 
-- [ ] 3. PennyLane backend implementation
-  - [ ] 3.1 Create `src/qrc_ev/backends/pennylane_backend.py` implementing `PennyLaneBackend(QuantumBackend)` with `create_circuit` (device init), `apply_encoding` (delegates to angle encoder), `apply_reservoir` (Ising unitary with Rz + CNOT+Rz couplings), `measure_observables` (Pauli-Z expectations), and `execute` (statevector or shot-based)
+- [x] 3. PennyLane backend implementation
+  - [x] 3.1 Create `src/qrc_ev/backends/pennylane_backend.py` implementing `PennyLaneBackend(QuantumBackend)` with `create_circuit` (device init), `apply_encoding` (delegates to angle encoder), `apply_reservoir` (Ising unitary with Rz + CNOT+Rz couplings), `measure_observables` (Pauli-Z expectations), and `execute` (statevector or shot-based)
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
   - [ ]* 3.2 Write property test for observable output dimension
     - **Property 3: Observable output dimension matches qubit count**
@@ -29,7 +29,7 @@ Incremental implementation of the QRC-EV foundation: project scaffolding → bac
   - [ ]* 3.3 Write property test for Pauli-Z value bounds
     - **Property 4: Pauli-Z values bounded in [-1, 1]**
     - **Validates: Requirements 6.2**
-  - [ ] 3.4 Create `src/qrc_ev/utils/check_backends.py` backend verification script that confirms PennyLane is installed and can execute a simple circuit
+  - [x] 3.4 Create `src/qrc_ev/utils/check_backends.py` backend verification script that confirms PennyLane is installed and can execute a simple circuit
     - _Requirements: 11.2_
 
 - [ ] 4. Angle encoding

@@ -81,7 +81,7 @@ class QuantumBackend(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def measure_observables(self, circuit: Any, obs_set: str = "pauli_z") -> np.ndarray:
+    def measure_observables(self, circuit: Any, obs_set: str = "pauli_z") -> Any:
         """Extract observable measurements from the circuit.
 
         Args:
@@ -89,7 +89,7 @@ class QuantumBackend(ABC):
             obs_set: Observable set name (e.g., "pauli_z").
 
         Returns:
-            NumPy array of expectation values.
+            Observable measurements (type depends on backend implementation).
         """
         raise NotImplementedError
 
