@@ -317,6 +317,7 @@ class CUDAQuantumBackend(QuantumBackend):
         cudaq = _ensure_cudaq()
         
         # Define the kernel
+        # Note: Inside @cudaq.kernel, use bare gate names (ry, rz, cx) not cudaq.ry
         @cudaq.kernel
         def reservoir_kernel(
             n_q: int,
@@ -332,14 +333,14 @@ class CUDAQuantumBackend(QuantumBackend):
             
             # Angle encoding: Ry(π * x) for each data value
             for idx in range(len(data_vals)):
-                cudaq.ry(3.141592653589793 * data_vals[idx], qubits[idx])
+                ry(3.141592653589793 * data_vals[idx], qubits[idx])
             
             # Reservoir layers
             for layer in range(num_layers):
                 # Single-qubit Rz rotations
                 for q in range(n_q):
                     angle_idx = layer * n_q + q
-                    cudaq.rz(rot_angles[angle_idx], qubits[q])
+                    rz(rot_angles[angle_idx], qubits[q])
                 
                 # Two-qubit couplings for this layer
                 for c_idx in range(len(coup_layers)):
@@ -347,8 +348,8 @@ class CUDAQuantumBackend(QuantumBackend):
                         i = coup_i[c_idx]
                         j = coup_j[c_idx]
                         strength = coup_strengths[c_idx]
-                        cudaq.cx(qubits[i], qubits[j])
-                        cudaq.rz(strength, qubits[j])
+                        cx(qubits[i], qubits[j])
+                        rz(strength, qubits[j])
         
         # Unpack couplings into separate lists
         coup_layers = [c[0] for c in couplings]
@@ -403,6 +404,7 @@ class CUDAQuantumBackend(QuantumBackend):
         cudaq = _ensure_cudaq()
         
         # Define the kernel with measurement
+        # Note: Inside @cudaq.kernel, use bare gate names (ry, rz, cx, mz) not cudaq.ry
         @cudaq.kernel
         def reservoir_kernel_sample(
             n_q: int,
@@ -418,24 +420,24 @@ class CUDAQuantumBackend(QuantumBackend):
             
             # Angle encoding
             for idx in range(len(data_vals)):
-                cudaq.ry(3.141592653589793 * data_vals[idx], qubits[idx])
+                ry(3.141592653589793 * data_vals[idx], qubits[idx])
             
             # Reservoir layers
             for layer in range(num_layers):
                 for q in range(n_q):
                     angle_idx = layer * n_q + q
-                    cudaq.rz(rot_angles[angle_idx], qubits[q])
+                    rz(rot_angles[angle_idx], qubits[q])
                 
                 for c_idx in range(len(coup_layers)):
                     if coup_layers[c_idx] == layer:
                         i = coup_i[c_idx]
                         j = coup_j[c_idx]
                         strength = coup_strengths[c_idx]
-                        cudaq.cx(qubits[i], qubits[j])
-                        cudaq.rz(strength, qubits[j])
+                        cx(qubits[i], qubits[j])
+                        rz(strength, qubits[j])
             
             # Measure all qubits
-            cudaq.mz(qubits)
+            mz(qubits)
         
         # Unpack couplings
         coup_layers = [c[0] for c in couplings]
