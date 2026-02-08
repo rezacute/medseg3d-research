@@ -171,12 +171,13 @@ class Preprocessor:
         normalized = (data - self._train_min) / range_val
         
         # Clip to [0, 1] as per Requirement 12.8
-        normalized = np.clip(normalized, 0.0, 1.0)
+        normalized_clipped: np.ndarray = np.clip(normalized, 0.0, 1.0)
         
         if is_1d:
-            normalized = normalized.flatten()
+            result: np.ndarray = normalized_clipped.flatten()
+            return result
             
-        return normalized
+        return normalized_clipped
 
     def create_windows(
         self, features: np.ndarray, targets: np.ndarray, window_size: int, horizon: int
