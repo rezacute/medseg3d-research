@@ -46,7 +46,9 @@ class PennyLaneBackend(QuantumBackend):
             PennyLane device object.
         """
         self._n_qubits = n_qubits
-        self._device = qml.device(self.device_name, wires=n_qubits, shots=self.shots)
+        # PennyLane requires shots=None for exact statevector simulation, not 0
+        shots = None if self.shots == 0 or self.shots is None else self.shots
+        self._device = qml.device(self.device_name, wires=n_qubits, shots=shots)
         return self._device
 
     def apply_encoding(
@@ -141,7 +143,7 @@ class PennyLaneBackend(QuantumBackend):
 
         Args:
             circuit: PennyLane device.
-            shots: Number of measurement shots. If None, use exact statevector
+            shots: Number of measurement shots. If None or 0, use exact statevector
                 simulation. If > 0, use shot-based sampling.
 
         Returns:
@@ -149,8 +151,10 @@ class PennyLaneBackend(QuantumBackend):
         """
         # Update device shots if different from default
         if shots != self.shots and shots is not None:
+            # PennyLane requires shots=None for exact statevector simulation
+            pl_shots = None if shots == 0 else shots
             self._device = qml.device(
-                self.device_name, wires=self._n_qubits, shots=shots
+                self.device_name, wires=self._n_qubits, shots=pl_shots
             )
 
         return self._device

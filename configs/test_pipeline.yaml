@@ -1,0 +1,27 @@
+# Test configuration for integration testing
+experiment:
+  name: "test_pipeline"
+  seeds: [42]
+  metrics: ["rmse", "r2"]
+
+quantum_model:
+  arch: "standard"
+  n_qubits: 4
+  n_layers: 2
+  evolution_steps: 1
+  encoding: "angle"
+  observables: "pauli_z"
+
+backend:
+  name: "pennylane"
+  device: "default.qubit"
+  shots: 0
+
+data:
+  dataset: "synthetic"
+  resolution: "1h"
+  window_size: 24
+  forecast_horizon: 1
+  train_ratio: 0.7
+  val_ratio: 0.15
+  test_ratio: 0.15

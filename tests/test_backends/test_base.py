@@ -121,6 +121,9 @@ class TestQuantumReservoirABC:
         class PartialReservoir(QuantumReservoir):
             """Subclass that implements only some methods."""
 
+            def __init__(self, backend, **kwargs):
+                pass
+
             def encode(self, x: np.ndarray) -> None:
                 pass
 
@@ -137,12 +140,13 @@ class TestQuantumReservoirABC:
                 pass
 
         # This should now be instantiable since all methods are implemented
-        reservoir = PartialReservoir()
+        reservoir = PartialReservoir(backend=None)
         assert reservoir is not None
 
     def test_abstract_methods_exist(self):
         """Test that all required abstract methods are defined."""
         abstract_methods = {
+            "__init__",
             "encode",
             "evolve",
             "measure",
@@ -221,7 +225,8 @@ class TestABCContractEnforcement:
         class CompleteReservoir(QuantumReservoir):
             """Complete reservoir implementation."""
 
-            def __init__(self):
+            def __init__(self, backend, **kwargs):
+                self.backend = backend
                 self.state = np.zeros(4)
 
             def encode(self, x: np.ndarray) -> None:
@@ -239,7 +244,7 @@ class TestABCContractEnforcement:
             def reset(self) -> None:
                 self.state = np.zeros(4)
 
-        reservoir = CompleteReservoir()
+        reservoir = CompleteReservoir(backend=None)
         assert reservoir is not None
         reservoir.encode(np.array([1.0, 2.0, 3.0, 4.0]))
         result = reservoir.measure()
