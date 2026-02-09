@@ -10,13 +10,18 @@ from typing import Any
 from qrc_ev.backends.base import QuantumBackend, QuantumReservoir
 from qrc_ev.reservoirs.standard import StandardReservoir
 from qrc_ev.reservoirs.recurrence_free import RecurrenceFreeReservoir
+from qrc_ev.reservoirs.polynomial import PolynomialReservoir
 
 # Registry mapping architecture names to reservoir classes
 _REGISTRY: dict[str, type[QuantumReservoir]] = {
     "standard": StandardReservoir,
+    "a1": StandardReservoir,  # Alias
     "recurrence_free": RecurrenceFreeReservoir,
     "rf_qrc": RecurrenceFreeReservoir,  # Alias
     "a2": RecurrenceFreeReservoir,  # Alias
+    "polynomial": PolynomialReservoir,
+    "poly_qrc": PolynomialReservoir,  # Alias
+    "a4": PolynomialReservoir,  # Alias
 }
 
 
