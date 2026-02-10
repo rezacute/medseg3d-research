@@ -11,6 +11,7 @@ from qrc_ev.backends.base import QuantumBackend, QuantumReservoir
 from qrc_ev.reservoirs.standard import StandardReservoir
 from qrc_ev.reservoirs.recurrence_free import RecurrenceFreeReservoir
 from qrc_ev.reservoirs.polynomial import PolynomialReservoir
+from qrc_ev.reservoirs.noise_aware import NoiseAwareReservoir
 
 # Registry mapping architecture names to reservoir classes
 _REGISTRY: dict[str, type[QuantumReservoir]] = {
@@ -22,6 +23,9 @@ _REGISTRY: dict[str, type[QuantumReservoir]] = {
     "polynomial": PolynomialReservoir,
     "poly_qrc": PolynomialReservoir,  # Alias
     "a4": PolynomialReservoir,  # Alias
+    "noise_aware": NoiseAwareReservoir,
+    "noisy_qrc": NoiseAwareReservoir,  # Alias
+    "a6": NoiseAwareReservoir,  # Alias
 }
 
 
