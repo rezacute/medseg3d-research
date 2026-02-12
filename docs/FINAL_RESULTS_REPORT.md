@@ -16,8 +16,11 @@ This study comprehensively evaluates Quantum Reservoir Computing (QRC) against c
 | Deep Learning (LSTM) | LSTM_128h_3L | 0.666 | 31s |
 | Quantum Reservoir (QRC) | Hybrid_8q_100n | 0.637 | 1834s |
 | Quantum Quadratic | QuadQRC_8q | 0.558 | 858s |
+| MTS-QRC (arXiv:2510.13634) | Hybrid_4i4m_ESN200 | 0.596 | 811s |
 
 **Conclusion**: For periodic time-series prediction tasks like EV charging, classical ESN is optimal. Quantum methods add computational overhead without improving accuracy.
+
+> **Update (Feb 12, 2026)**: We additionally tested the MTS-QRC architecture from arXiv:2510.13634, which uses injection+memory qubits with Trotterized Ising evolution. Despite its success on chaotic systems (Lorenz-63, ENSO), it underperforms our previous QRC approaches on EV charging data. See `MTS_QRC_EXPERIMENT_REPORT.md` for details.
 
 ---
 
@@ -91,8 +94,11 @@ This study comprehensively evaluates Quantum Reservoir Computing (QRC) against c
 | Weekly Profile | 0.645 | 30.78 | - | <1s | Baseline |
 | Hybrid_8q_100n | 0.637 | 31.12 | - | 1834s | Best QRC |
 | Hybrid_12q_100n | 0.635 | 31.21 | - | - | |
+| MTS-QRC Hybrid_4i4m_ESN200 | 0.596 | 32.85 | - | 811s | arXiv:2510.13634 |
 | QuadQRC_8q | 0.558 | 34.33 | - | 858s | |
+| MTS-QRC_6i6m | 0.523 | 35.69 | - | 1149s | Pure MTS-QRC |
 | MultiBasis_8q | 0.519 | 35.84 | - | 1145s | |
+| MTS-QRC_4i4m | 0.504 | 36.38 | - | 750s | Pure MTS-QRC |
 
 ### 4.2 Key Comparisons
 
