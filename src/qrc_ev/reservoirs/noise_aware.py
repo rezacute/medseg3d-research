@@ -112,7 +112,7 @@ class NoiseAwareReservoir(QuantumReservoir):
         Returns:
             Noised expectations.
         """
-        noised = expectations.copy()
+        noised: np.ndarray = expectations.copy()
         
         if self.noise_type == "depolarizing":
             # Depolarizing: expectations decay toward 0
