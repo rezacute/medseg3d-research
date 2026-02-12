@@ -398,7 +398,7 @@ class HybridAttentionQRC:
                 
                 # Fuse
                 fused = torch.cat([q, cross_out], dim=-1)
-                return self.fusion(fused)  # type: ignore[no-any-return]
+                return self.fusion(fused)
         
         self.cross_attention = CrossAttention(
             self.hidden_dim, self.esn_size, self.hidden_dim

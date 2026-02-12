@@ -118,7 +118,7 @@ class TemporalFusionTransformer:
                 out = gate * out + (1 - gate) * residual
                 out = self.layer_norm(out)
 
-                return out  # type: ignore[no-any-return]
+                return out
 
         class SimpleTFT(nn.Module):
             """Simplified TFT architecture."""
@@ -180,7 +180,7 @@ class TemporalFusionTransformer:
                 h = self.grn_out(h)
                 out = self.fc_out(h)
 
-                return out.squeeze(-1)  # type: ignore[no-any-return]
+                return out.squeeze(-1)
         
         self.model = SimpleTFT(
             input_dim, self.hidden_size, self.num_heads, 
