@@ -80,7 +80,12 @@ class TestFactoryProperties:
             ),
             min_size=1,
             max_size=50,
-        ).filter(lambda x: x != "standard")
+        ).filter(lambda x: x not in [
+            "standard", "a1",
+            "recurrence_free", "a2", "rf_qrc",
+            "polynomial", "a4", "poly_qrc",
+            "noise_aware", "a6", "noisy_qrc",
+        ])
     )
     @settings(max_examples=100, deadline=None)
     def test_property_factory_rejects_unknown_architectures(self, arch_name: str):

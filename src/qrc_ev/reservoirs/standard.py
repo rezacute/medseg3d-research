@@ -89,8 +89,9 @@ class StandardReservoir(QuantumReservoir):
     def _build_and_run_circuit(self, data: np.ndarray) -> np.ndarray:
         """Build and execute a full reservoir circuit for one timestep.
 
-        Constructs a QNode that applies encoding → reservoir evolution → measurement,
-        then executes it and returns the observable values.
+        Uses backend-agnostic methods to support multiple quantum frameworks.
+        For PennyLane, constructs a QNode. For CUDA-Q and others, uses the
+        backend's native execution path.
 
         Args:
             data: Input feature vector of shape (d,) with values in [0, 1].
@@ -98,23 +99,38 @@ class StandardReservoir(QuantumReservoir):
         Returns:
             NumPy array of Pauli-Z expectation values with shape (n_qubits,).
         """
-        # Use the backend's device (already created with correct shots parameter)
-        dev = self.backend._device
+        # Check if backend has native _device (PennyLane) or not (CUDA-Q, Qiskit)
+        if hasattr(self.backend, '_device') and self.backend._device is not None:
+            # PennyLane path: use qml.qnode
+            dev = self.backend._device
 
-        @qml.qnode(dev, interface="numpy")
-        def circuit() -> list:
-            # Encode input data
-            angle_encode(data, self.n_qubits)
+            @qml.qnode(dev, interface="numpy")
+            def circuit() -> list:
+                # Encode input data
+                angle_encode(data, self.n_qubits)
 
-            # Apply reservoir unitary evolution_steps times
-            for _ in range(self.evolution_steps):
-                self.backend.apply_reservoir(None, self.params)
+                # Apply reservoir unitary evolution_steps times
+                for _ in range(self.evolution_steps):
+                    self.backend.apply_reservoir(None, self.params)
 
-            # Measure Pauli-Z observables
-            return pauli_z_observables(self.n_qubits)
+                # Measure Pauli-Z observables
+                return pauli_z_observables(self.n_qubits)
 
-        result = circuit()
-        return np.array(result)
+            result = circuit()
+            return np.array(result)
+        else:
+            # Backend-agnostic path: use backend methods directly
+            # This works for CUDA-Q, Qiskit, and other backends
+            # Note: create_circuit was already called in __init__
+            self.backend.apply_encoding(None, data, strategy="angle")
+            
+            # Store params for the kernel (evolution_steps handled internally)
+            # For backends that support multiple evolution steps, we'd loop here
+            # For now, we apply once (CUDA-Q kernel handles the layers internally)
+            self.backend.apply_reservoir(None, self.params)
+            
+            result = self.backend.measure_observables(None, obs_set="pauli_z")
+            return np.array(result)
 
     def encode(self, x: np.ndarray) -> None:
         """Encode input data into the quantum state via angle encoding.
