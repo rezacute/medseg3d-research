@@ -214,6 +214,7 @@ class CUDAQuantumBackend(QuantumBackend):
         if strategy != "angle":
             raise ValueError(f"Unsupported encoding strategy: {strategy}")
         
+
         if len(data) > self._n_qubits:
             raise ValueError(
                 f"Input dimension {len(data)} exceeds qubit count {self._n_qubits}"
@@ -507,3 +508,4 @@ class CUDAQuantumBackend(QuantumBackend):
         """
         self._encoded_data = None
         self._reservoir_params = None
+
