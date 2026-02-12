@@ -3,7 +3,10 @@
 Classical reservoir computing baseline for comparison with QRC.
 """
 
+from typing import Any, Optional, cast
+
 import numpy as np
+from numpy.typing import NDArray
 from sklearn.linear_model import Ridge
 
 
@@ -43,12 +46,12 @@ class EchoStateNetwork:
         self.alpha = alpha
         self.seed = seed
         
-        self.W = None
-        self.W_in = None
-        self.readout = None
-        self._input_dim = None
+        self.W: Optional[NDArray[np.floating[Any]]] = None
+        self.W_in: Optional[NDArray[np.floating[Any]]] = None
+        self.readout: Optional[Ridge] = None
+        self._input_dim: Optional[int] = None
         
-    def _init_weights(self, input_dim: int):
+    def _init_weights(self, input_dim: int) -> None:
         """Initialize reservoir weights."""
         rng = np.random.default_rng(self.seed)
         
@@ -63,20 +66,22 @@ class EchoStateNetwork:
         self.W_in = rng.uniform(-1, 1, (self.n_reservoir, input_dim))
         self._input_dim = input_dim
         
-    def _compute_states(self, X: np.ndarray) -> np.ndarray:
+    def _compute_states(self, X: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
         """Compute reservoir states for input sequence."""
+        assert self.W is not None
+        assert self.W_in is not None
         T = len(X)
         states = np.zeros((T, self.n_reservoir))
         state = np.zeros(self.n_reservoir)
-        
+
         for t in range(T):
             pre_activation = np.tanh(self.W_in @ X[t] + self.W @ state)
             state = (1 - self.leak_rate) * state + self.leak_rate * pre_activation
             states[t] = state
-            
+
         return states
     
-    def fit(self, X: np.ndarray, y: np.ndarray):
+    def fit(self, X: NDArray[np.floating[Any]], y: NDArray[np.floating[Any]]) -> None:
         """Fit the ESN to training data.
         
         Args:
@@ -87,7 +92,7 @@ class EchoStateNetwork:
             self._init_weights(X.shape[1])
             
         states = self._compute_states(X)
-        
+
         self.readout = Ridge(alpha=self.alpha)
         self.readout.fit(states, y)
         
@@ -101,14 +106,15 @@ class EchoStateNetwork:
             Predictions of shape (T,).
         """
         states = self._compute_states(X)
-        return self.readout.predict(states)
+        assert self.readout is not None
+        return self.readout.predict(states)  # type: ignore[no-any-return]
     
-    def get_states(self, X: np.ndarray) -> np.ndarray:
+    def get_states(self, X: NDArray[np.floating[Any]]) -> NDArray[np.floating[Any]]:
         """Get reservoir states without prediction.
-        
+
         Args:
             X: Input features of shape (T, input_dim).
-            
+
         Returns:
             Reservoir states of shape (T, n_reservoir).
         """

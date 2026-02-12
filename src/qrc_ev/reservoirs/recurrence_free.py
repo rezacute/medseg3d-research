@@ -179,8 +179,8 @@ class RecurrenceFreeReservoir(QuantumReservoir):
         
         # Reconstruct
         denoised = U_truncated @ np.diag(S_truncated) @ Vt_truncated
-        
-        return denoised
+
+        return denoised  # type: ignore[no-any-return]
 
     def encode(self, x: np.ndarray) -> None:
         """Encode input data (not used in RF-QRC, kept for interface)."""

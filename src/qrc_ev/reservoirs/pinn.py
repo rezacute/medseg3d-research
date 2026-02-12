@@ -7,10 +7,14 @@ Incorporates physical constraints into the readout layer:
 3. Periodicity: Encourage daily/weekly patterns
 """
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
 import numpy as np
 from .polynomial import PolynomialReservoir
-from qrc_ev.backends.base import QuantumBackend
+from qrc_ev.backends.base import QuantumBackend, ReservoirParams
+
+if TYPE_CHECKING:
+    pass
 
 
 class PhysicsInformedReservoir(PolynomialReservoir):
@@ -125,10 +129,8 @@ class SparseEntanglementReservoir(PolynomialReservoir):
             seed=seed,
         )
     
-    def _generate_fixed_params(self, seed: int):
+    def _generate_fixed_params(self, seed: int) -> ReservoirParams:
         """Generate params with sparse coupling mask."""
-        from qrc_ev.backends.base import ReservoirParams
-        
         rng = np.random.default_rng(seed)
         
         # Generate base couplings
@@ -205,11 +207,11 @@ class DropoutReservoir(PolynomialReservoir):
         self._rng = np.random.default_rng(seed + 1000)
         self._training = True
     
-    def train(self):
+    def train(self) -> None:
         """Set to training mode (dropout active)."""
         self._training = True
     
-    def eval(self):
+    def eval(self) -> None:
         """Set to eval mode (dropout inactive)."""
         self._training = False
     

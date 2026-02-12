@@ -4,6 +4,7 @@ Long Short-Term Memory network using PyTorch.
 """
 
 import numpy as np
+from typing import Optional
 
 try:
     import torch
@@ -67,19 +68,25 @@ class LSTMForecaster:
         self.seq_length = seq_length
         self.seed = seed
         
-        self.model = None
+        self.model: Optional[nn.Module] = None
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self._input_dim = None
+        self._input_dim: Optional[int] = None
         
         torch.manual_seed(seed)
         if torch.cuda.is_available():
             torch.cuda.manual_seed(seed)
     
-    def _build_model(self, input_dim: int):
+    def _build_model(self, input_dim: int) -> None:
         """Build the LSTM model."""
-        
+
         class LSTMModel(nn.Module):
-            def __init__(self, input_dim, hidden_size, num_layers, dropout):
+            def __init__(
+                self,
+                input_dim: int,
+                hidden_size: int,
+                num_layers: int,
+                dropout: float,
+            ) -> None:
                 super().__init__()
                 self.lstm = nn.LSTM(
                     input_size=input_dim,
@@ -90,18 +97,18 @@ class LSTMForecaster:
                 )
                 self.fc = nn.Linear(hidden_size, 1)
                 
-            def forward(self, x):
+            def forward(self, x: torch.Tensor) -> torch.Tensor:
                 # x: (batch, seq_len, input_dim)
                 lstm_out, _ = self.lstm(x)
                 # Take last timestep
-                out = self.fc(lstm_out[:, -1, :])
+                out: torch.Tensor = self.fc(lstm_out[:, -1, :])
                 return out.squeeze(-1)
         
         self.model = LSTMModel(input_dim, self.hidden_size, self.num_layers, self.dropout)
         self.model.to(self.device)
         self._input_dim = input_dim
         
-    def _create_sequences(self, X: np.ndarray, y: np.ndarray):
+    def _create_sequences(self, X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Create sequences for LSTM training."""
         sequences = []
         targets = []
@@ -112,7 +119,13 @@ class LSTMForecaster:
             
         return np.array(sequences), np.array(targets)
     
-    def fit(self, X: np.ndarray, y: np.ndarray, X_val: np.ndarray = None, y_val: np.ndarray = None):
+    def fit(
+        self,
+        X: np.ndarray,
+        y: np.ndarray,
+        X_val: Optional[np.ndarray] = None,
+        y_val: Optional[np.ndarray] = None,
+    ) -> None:
         """Fit the LSTM to training data.
         
         Args:
@@ -123,7 +136,8 @@ class LSTMForecaster:
         """
         if self.model is None:
             self._build_model(X.shape[1])
-            
+        assert self.model is not None
+
         # Create sequences
         X_seq, y_seq = self._create_sequences(X, y)
         
@@ -134,12 +148,12 @@ class LSTMForecaster:
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
         
         # Validation data
+        X_val_tensor: Optional[torch.Tensor] = None
+        y_val_tensor: Optional[torch.Tensor] = None
         if X_val is not None and y_val is not None:
             X_val_seq, y_val_seq = self._create_sequences(X_val, y_val)
             X_val_tensor = torch.FloatTensor(X_val_seq).to(self.device)
             y_val_tensor = torch.FloatTensor(y_val_seq).to(self.device)
-        else:
-            X_val_tensor = y_val_tensor = None
             
         # Training
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
@@ -150,7 +164,7 @@ class LSTMForecaster:
         
         for epoch in range(self.epochs):
             self.model.train()
-            train_loss = 0
+            train_loss: float = 0.0
             
             for batch_X, batch_y in loader:
                 optimizer.zero_grad()
@@ -166,7 +180,7 @@ class LSTMForecaster:
             if X_val_tensor is not None:
                 self.model.eval()
                 with torch.no_grad():
-                    val_pred = self.model(X_val_tensor)
+                    val_pred: torch.Tensor = self.model(X_val_tensor)
                     val_loss = criterion(val_pred, y_val_tensor).item()
                     
                 if val_loss < best_val_loss:
@@ -185,24 +199,25 @@ class LSTMForecaster:
                 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict using the trained LSTM.
-        
+
         Args:
             X: Input features of shape (T, input_dim).
-            
+
         Returns:
             Predictions of shape (T - seq_length,).
         """
+        assert self.model is not None
         self.model.eval()
-        
+
         # Create sequences
-        sequences = []
+        sequences: list[np.ndarray] = []
         for i in range(len(X) - self.seq_length):
             sequences.append(X[i:i + self.seq_length])
-        sequences = np.array(sequences)
+        sequences = np.array(sequences)  # type: ignore[assignment]
         
         X_tensor = torch.FloatTensor(sequences).to(self.device)
         
         with torch.no_grad():
             predictions = self.model(X_tensor).cpu().numpy()
-            
-        return predictions
+
+        return predictions  # type: ignore[no-any-return]

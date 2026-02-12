@@ -12,6 +12,7 @@ import numpy as np
 from sklearn.metrics import mean_squared_error, r2_score
 
 from qrc_ev.backends.pennylane_backend import PennyLaneBackend
+from qrc_ev.backends.base import QuantumBackend
 from qrc_ev.backends import CUDAQ_AVAILABLE
 from qrc_ev.data.preprocessor import Preprocessor
 from qrc_ev.data.synthetic import SyntheticGenerator
@@ -115,6 +116,7 @@ def run_pipeline(config_path: str) -> dict[str, Any]:
     logger.info(
         f"Creating {config.backend.name} backend with device {config.backend.device}"
     )
+    backend: QuantumBackend
     if config.backend.name == "pennylane":
         backend = PennyLaneBackend(
             device_name=config.backend.device, shots=config.backend.shots

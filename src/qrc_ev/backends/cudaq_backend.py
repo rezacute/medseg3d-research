@@ -329,28 +329,28 @@ class CUDAQuantumBackend(QuantumBackend):
             coup_j: list[int],
             coup_strengths: list[float],
             num_layers: int,
-        ):
+        ) -> None:
             qubits = cudaq.qvector(n_q)
-            
+
             # Angle encoding: Ry(π * x) for each data value
             for idx in range(len(data_vals)):
-                ry(3.141592653589793 * data_vals[idx], qubits[idx])
-            
+                ry(3.141592653589793 * data_vals[idx], qubits[idx])  # type: ignore[name-defined]
+
             # Reservoir layers
             for layer in range(num_layers):
                 # Single-qubit Rz rotations
                 for q in range(n_q):
                     angle_idx = layer * n_q + q
-                    rz(rot_angles[angle_idx], qubits[q])
-                
+                    rz(rot_angles[angle_idx], qubits[q])  # type: ignore[name-defined]
+
                 # Two-qubit couplings for this layer
                 for c_idx in range(len(coup_layers)):
                     if coup_layers[c_idx] == layer:
                         i = coup_i[c_idx]
                         j = coup_j[c_idx]
                         strength = coup_strengths[c_idx]
-                        cx(qubits[i], qubits[j])
-                        rz(strength, qubits[j])
+                        cx(qubits[i], qubits[j])  # type: ignore[name-defined]
+                        rz(strength, qubits[j])  # type: ignore[name-defined]
         
         # Unpack couplings into separate lists
         coup_layers = [c[0] for c in couplings]
@@ -416,29 +416,29 @@ class CUDAQuantumBackend(QuantumBackend):
             coup_j: list[int],
             coup_strengths: list[float],
             num_layers: int,
-        ):
+        ) -> None:
             qubits = cudaq.qvector(n_q)
-            
+
             # Angle encoding
             for idx in range(len(data_vals)):
-                ry(3.141592653589793 * data_vals[idx], qubits[idx])
-            
+                ry(3.141592653589793 * data_vals[idx], qubits[idx])  # type: ignore[name-defined]
+
             # Reservoir layers
             for layer in range(num_layers):
                 for q in range(n_q):
                     angle_idx = layer * n_q + q
-                    rz(rot_angles[angle_idx], qubits[q])
-                
+                    rz(rot_angles[angle_idx], qubits[q])  # type: ignore[name-defined]
+
                 for c_idx in range(len(coup_layers)):
                     if coup_layers[c_idx] == layer:
                         i = coup_i[c_idx]
                         j = coup_j[c_idx]
                         strength = coup_strengths[c_idx]
-                        cx(qubits[i], qubits[j])
-                        rz(strength, qubits[j])
-            
+                        cx(qubits[i], qubits[j])  # type: ignore[name-defined]
+                        rz(strength, qubits[j])  # type: ignore[name-defined]
+
             # Measure all qubits
-            mz(qubits)
+            mz(qubits)  # type: ignore[name-defined]
         
         # Unpack couplings
         coup_layers = [c[0] for c in couplings]

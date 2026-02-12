@@ -134,13 +134,19 @@ class AttentionQRC:
             seed=seed,
         )
         
-    def _build_attention_module(self, dropout: float):
+    def _build_attention_module(self, dropout: float) -> None:
         """Build multi-head attention module."""
-        
+
         class QuantumAttention(nn.Module):
             """Multi-head attention over quantum features."""
-            
-            def __init__(self, quantum_dim, hidden_dim, n_heads, dropout):
+
+            def __init__(
+                self,
+                quantum_dim: int,
+                hidden_dim: int,
+                n_heads: int,
+                dropout: float,
+            ) -> None:
                 super().__init__()
                 
                 # Project quantum features
@@ -166,8 +172,10 @@ class AttentionQRC:
                     nn.Linear(hidden_dim, hidden_dim),
                     nn.Sigmoid()
                 )
-                
-            def forward(self, x):
+
+            def forward(
+                self, x: torch.Tensor
+            ) -> tuple[torch.Tensor, torch.Tensor]:
                 # x: (batch, seq_len, quantum_dim)
                 q = self.q_proj(x)
                 k = self.k_proj(x)
@@ -206,7 +214,7 @@ class AttentionQRC:
             dev = self.backend._device
             
             @qml.qnode(dev, interface="numpy")
-            def circuit():
+            def circuit() -> list:
                 # Encode input
                 angle_encode(data, self.n_qubits)
                 
@@ -255,13 +263,17 @@ class AttentionQRC:
                 return np.concatenate([z, zz_approx])
             return np.array(z_result)
     
-    def process(self, time_series: np.ndarray, return_attention: bool = False) -> np.ndarray:
+    def process(
+        self,
+        time_series: np.ndarray,
+        return_attention: bool = False,
+    ) -> np.ndarray | tuple[np.ndarray, np.ndarray]:
         """Process time-series through attention-enhanced QRC.
-        
+
         Args:
             time_series: Input of shape (T, d).
             return_attention: Return attention weights. Default: False.
-            
+
         Returns:
             Features of shape (T, hidden_dim).
             Optionally: attention weights of shape (T, n_heads, T, T).
@@ -281,10 +293,10 @@ class AttentionQRC:
             attended, weights = self.attention_module(x)
         
         features = attended.squeeze(0).cpu().numpy()  # (T, hidden_dim)
-        
+
         if return_attention:
             return features, weights.cpu().numpy()
-        return features
+        return features  # type: ignore[no-any-return]
     
     def process_with_classical(
         self, 
@@ -350,11 +362,17 @@ class HybridAttentionQRC:
         self.device = self.attention_qrc.device
         self._build_cross_attention()
         
-    def _build_cross_attention(self):
+    def _build_cross_attention(self) -> None:
         """Build cross-attention between quantum and classical."""
-        
+
         class CrossAttention(nn.Module):
-            def __init__(self, q_dim, c_dim, hidden_dim, n_heads=4):
+            def __init__(
+                self,
+                q_dim: int,
+                c_dim: int,
+                hidden_dim: int,
+                n_heads: int = 4,
+            ) -> None:
                 super().__init__()
                 self.q_proj = nn.Linear(q_dim, hidden_dim)
                 self.c_proj = nn.Linear(c_dim, hidden_dim)
@@ -368,8 +386,10 @@ class HybridAttentionQRC:
                     nn.ReLU(),
                     nn.Linear(hidden_dim, hidden_dim)
                 )
-                
-            def forward(self, quantum_feat, classical_feat):
+
+            def forward(
+                self, quantum_feat: torch.Tensor, classical_feat: torch.Tensor
+            ) -> torch.Tensor:
                 q = self.q_proj(quantum_feat)
                 c = self.c_proj(classical_feat)
                 
@@ -378,7 +398,7 @@ class HybridAttentionQRC:
                 
                 # Fuse
                 fused = torch.cat([q, cross_out], dim=-1)
-                return self.fusion(fused)
+                return self.fusion(fused)  # type: ignore[no-any-return]
         
         self.cross_attention = CrossAttention(
             self.hidden_dim, self.esn_size, self.hidden_dim
@@ -406,8 +426,8 @@ class HybridAttentionQRC:
         self.cross_attention.eval()
         with torch.no_grad():
             fused = self.cross_attention(q_tensor, c_tensor)
-        
-        return fused.squeeze(0).cpu().numpy()
+
+        return fused.squeeze(0).cpu().numpy()  # type: ignore[no-any-return]
     
     @property
     def n_features(self) -> int:

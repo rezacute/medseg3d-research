@@ -116,7 +116,7 @@ def check_cudaq() -> Tuple[bool, str]:
         
         # Test basic circuit execution
         @cudaq.kernel
-        def simple_circuit():
+        def simple_circuit() -> None:
             qubit = cudaq.qubit()
             cudaq.h(qubit)
             cudaq.mz(qubit)
@@ -150,7 +150,7 @@ def check_cudaq_gpu() -> Tuple[bool, str]:
         
         # Quick test
         @cudaq.kernel
-        def gpu_test():
+        def gpu_test() -> None:
             qubit = cudaq.qubit()
             cudaq.h(qubit)
         
