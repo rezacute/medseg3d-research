@@ -82,6 +82,25 @@ data/external/
 *.pickle
 !data/.gitkeep
 
+# ---------- NVME / Large Storage ----------
+/opt/dlami/
+/mnt/
+*.nii.gz
+*.nrrd
+*.mha
+*.stl
+
+# ---------- Model Cache ----------
+/opt/ollama/
+/usr/share/ollama/
+*.gguf
+*.onnx
+
+# ---------- CUDA / GPU Cache ----------
+*.cublas_log
+*.cupti*
+.cuda_cache/
+
 # ---------- Experiment Results / MLflow ----------
 results/
 mlruns/
