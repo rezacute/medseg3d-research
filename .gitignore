@@ -1,6 +1,5 @@
 # ============================================================================
-# QRC-EV .gitignore
-# Python / Quantum Computing / Data Science / Research Project
+# MedSeg3D Research .gitignore
 # ============================================================================
 
 # ---------- Python ----------
@@ -9,22 +8,12 @@ __pycache__/
 *$py.class
 *.so
 *.pyd
-
-# ---------- Distribution / Packaging ----------
-build/
-dist/
-*.egg-info/
-*.egg
-wheels/
-pip-wheel-metadata/
-MANIFEST
-src/*.egg-info/
+*.pyc
 
 # ---------- Virtual Environments ----------
 .venv/
 venv/
 env/
-ENV/
 .conda/
 *.conda
 
@@ -33,125 +22,69 @@ ENV/
 .coverage
 .coverage.*
 htmlcov/
-coverage.xml
-*.cover
-.hypothesis/
-.tox/
-.nox/
 
-# ---------- Type Checking / Linting ----------
-.mypy_cache/
-.dmypy.json
-dmypy.json
-.ruff_cache/
-.pytype/
-
-# ---------- Jupyter Notebooks ----------
-.ipynb_checkpoints/
-*.ipynb_metadata/
-
-# ---------- IDE / Editor ----------
+# ---------- IDE ----------
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.project
-.settings/
-.classpath
-*.sublime-project
-*.sublime-workspace
 
 # ---------- OS ----------
 .DS_Store
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-._*
 
-# ---------- Data (large files, raw datasets) ----------
-data/raw/
-data/processed/
-data/interim/
-data/external/
-*.parquet
-*.h5
-*.hdf5
-*.feather
-*.pkl
-*.pickle
-!data/.gitkeep
-
-# ---------- NVME / Large Storage ----------
-/opt/dlami/
-/mnt/
+# ---------- Data & Raw Medical Images ----------
+data/
+*.nii
 *.nii.gz
 *.nrrd
 *.mha
 *.stl
+*.dcm
+*.dicom
 
-# ---------- Model Cache ----------
-/opt/ollama/
-/usr/share/ollama/
-*.gguf
-*.onnx
-
-# ---------- CUDA / GPU Cache ----------
-*.cublas_log
-*.cupti*
-.cuda_cache/
-
-# ---------- Experiment Results / MLflow ----------
-results/
-mlruns/
-mlflow.db
-*.json.lock
-
-# ---------- Model Checkpoints ----------
-checkpoints/
+# ---------- Model Weights & Checkpoints ----------
 *.pt
 *.pth
 *.ckpt
+checkpoints/
 saved_models/
 
+# ---------- Experiment Results (keep small JSON summaries) ----------
+!results/*.json
+results/
+mlruns/
+mlflow.db
+
 # ---------- Logs ----------
-logs/
 *.log
+logs/
 
-# ---------- Quantum Backend Caches ----------
-.qiskit/
-.pennylane/
+# ---------- CUDA / GPU Cache ----------
+*.cuda_cache/
+.cupti*
 
-# ---------- IBM Quantum Credentials ----------
-qiskitrc
-ibm_quantum_token.txt
-
-# ---------- Paper / LaTeX Build Artifacts ----------
-paper/*.aux
-paper/*.bbl
-paper/*.blg
-paper/*.fdb_latexmk
-paper/*.fls
-paper/*.out
-paper/*.synctex.gz
-paper/*.toc
-paper/*.lof
-paper/*.lot
-paper/*.nav
-paper/*.snm
-paper/*.vrb
-paper/*.run.xml
-paper/*.bcf
-paper/*-blx.bib
-
-# ---------- Secrets / Credentials ----------
+# ---------- Secrets ----------
 .env
 .env.*
 secrets/
 *.pem
 *.key
 
-# ---------- Misc ----------
+# ---------- LaTeX / Paper Build ----------
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.out
+paper/*.log
+paper/*.toc
+
+# ---------- Large numpy arrays ----------
+*.npz
+*.npy
+
+# ---------- Temporary files ----------
 *.bak
 *.tmp
 *.temp
