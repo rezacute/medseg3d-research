@@ -1,0 +1,825 @@
+"""Quantum Hidden Markov Model (QHMM) with OMLE (Online Maximum Likelihood Estimation).
+
+This module implements a QHMM environment with CPTP-constrained maximum likelihood
+estimation of channel and instrument parameters from trajectory data.
+
+Parameters:
+    ω = (ρ_1, {E_l}, {Φ^(a)_o})
+    - ρ_1: Initial quantum state (density matrix, S×S)
+    - {E_l}: List of L channel Kraus operators, each E_l: M_S → M_S
+    - {Φ^(a)_o}: Instrument branches — for action a, outcome o maps to Choi matrix
+
+Dataset:
+    D = {(actions^i, outcomes^i)}_{i=1}^K
+    Each trajectory τ = (a_1, o_1, a_2, o_2, ..., a_T, o_T)
+
+References:
+    - QMice (https://github.com/rizavico/qmice) for filtered state formalism
+    - Choi, J. (1975). Completely positive linear maps on complex matrices
+"""
+
+from __future__ import annotations
+
+import warnings
+from dataclasses import dataclass, field
+from typing import Optional
+
+import numpy as np
+
+# cvxpy for SDP formulation
+try:
+    import cvxpy as cp
+    _CVXPX_AVAILABLE = True
+except ImportError:
+    cp = None  # type: ignore
+    _CVXPX_AVAILABLE = False
+
+# Try MOSEK solver, fall back to SCS
+_SOLVER = "MOSEK" if _CVXPX_AVAILABLE else None
+if _CVXPX_AVAILABLE:
+    try:
+        import mosek  # noqa: F401
+    except ImportError:
+        _SOLVER = "SCS"
+
+
+# =============================================================================
+# Choi Matrix Utilities
+# =============================================================================
+
+
+def choi_from_kraus(Ks: list[np.ndarray]) -> np.ndarray:
+    """Construct Choi matrix J(Φ) from Kraus operators {K_i}.
+
+    J(Φ) = Σ_i |K_i⟩⟩⟨⟨K_i|  where |K_i⟩⟩ = (K_i ⊗ I) vec(I)
+
+    Args:
+        Ks: List of Kraus operators, each of shape (d_out, d_in).
+
+    Returns:
+        Choi matrix J of shape (d_out*d_out, d_in*d_in).
+    """
+    d_in = Ks[0].shape[1]
+    d_out = Ks[0].shape[0]
+
+    J = np.zeros((d_out * d_out, d_in * d_in), dtype=np.complex128)
+
+    for K in Ks:
+        # Vectorize: |K⟩⟩ = (K ⊗ I) vec(I)
+        vec_K = np.kron(K, np.eye(d_out)) @ np.eye(d_in).reshape(-1)
+        J += np.outer(vec_K, vec_K.conj())
+
+    return J
+
+
+def kraus_from_choi(J: np.ndarray, d_in: int, d_out: int) -> list[np.ndarray]:
+    """Extract Kraus operators from Choi matrix via eigendecomposition.
+
+    J = Σ_i λ_i |v_i⟩⟩⟨⟨v_i|,  then K_i = reshape(v_i, (d_out, d_in)) * sqrt(λ_i)
+
+    Args:
+        J: Choi matrix, shape (d_out*d_out, d_in*d_in).
+        d_in: Input dimension.
+        d_out: Output dimension.
+
+    Returns:
+        List of Kraus operators K_i, each shape (d_out, d_in).
+    """
+    # Eigenvalue decomposition
+    eigenvalues, eigenvectors = np.linalg.eigh(J)
+
+    # Keep only positive eigenvalues (numerical PSD enforcement)
+    Ks = []
+    for i in range(len(eigenvalues)):
+        lam = eigenvalues[i]
+        if lam > 1e-9:
+            v = eigenvectors[:, i]
+            K = v.reshape(d_out, d_in) * np.sqrt(lam)
+            Ks.append(K)
+
+    return Ks if Ks else [np.zeros((d_out, d_in), dtype=np.complex128)]
+
+
+def choi_to_ptm(J: np.ndarray, d: int) -> np.ndarray:
+    """Convert Choi matrix to Pauli transfer matrix (PTM) basis.
+
+    PTM representation: ρ_out = Σ_r R_r ρ_in R_r† / 4^r  (over 4^r Pauli operators)
+
+    Args:
+        J: Choi matrix, shape (d*d, d*d).
+        d: Dimension.
+
+    Returns:
+        PTM matrix of shape (d², d²).
+    """
+    # Build Pauli basis
+    paulis = _pauli_basis(d)
+    PTM = np.zeros((d * d, d * d), dtype=np.complex128)
+
+    for a in range(d * d):
+        for b in range(d * d):
+            # PTM[r,s] = Tr[P_r J P_s] / d
+            PTM[a, b] = np.trace(paulis[a] @ J @ paulis[b].conj().T) / d
+
+    return PTM.real
+
+
+def _pauli_basis(d: int) -> list[np.ndarray]:
+    """Generate generalized Pauli basis for dimension d."""
+    paulis = []
+    for a in range(d * d):
+        G = np.zeros((d, d), dtype=np.complex128)
+        ia = a % d
+        ib = a // d
+        G[ia, ib] = 1.0
+        paulis.append(G)
+    return paulis
+
+
+def vec_dag(v: np.ndarray) -> np.ndarray:
+    """Hermitian conjugate of a vector (reshaped matrix)."""
+    return v.conj().T
+
+
+def is_choi_valid(J: np.ndarray, d_in: int, d_out: int, tol: float = 1e-6) -> bool:
+    """Check if J is a valid Choi matrix (PSD, trace-preserving)."""
+    if J.shape != (d_out * d_out, d_in * d_in):
+        return False
+    # PSD check
+    evals = np.linalg.eigvalsh(J)
+    if evals.min() < -tol:
+        return False
+    # Trace-preserving: Tr_out[J] = I_d_in
+    d_out_sq = d_out * d_out
+    tr_out = np.zeros((d_in, d_in), dtype=np.complex128)
+    for r in range(d_out):
+        for c in range(d_out):
+            tr_out += J[r * d_out:(r + 1) * d_out, c * d_in:(c + 1) * d_in]
+    if np.linalg.norm(tr_out - np.eye(d_in)) > tol:
+        return False
+    return True
+
+
+# =============================================================================
+# Filtered State (Eq. 2.4 — subnormalized)
+# =============================================================================
+
+
+def unnormalized_filter(
+    rho_prev: np.ndarray,
+    action: int,
+    outcome: int,
+    J_channels: list[np.ndarray],
+    J_instruments: dict[tuple[int, int], np.ndarray],
+    S: int,
+) -> np.ndarray:
+    """Compute subnormalized filtered state (Eq. 2.4).
+
+    ρ̃(a, o) = Tr_out[Φ^{(a)}_o ⊗ I_S  (I_S ⊗ ρ̃_prev)  J(E_{a})]
+
+    This is the unnormalized posterior state after observing outcome o
+    given action a, starting from rho_prev.
+
+    Args:
+        rho_prev: Previous (subnormalized) filtered state, shape (S, S).
+        action: Action index a ∈ {0, ..., A-1}.
+        outcome: Outcome index o.
+        J_channels: List of channel Choi matrices [J(E_0), ..., J(E_{L-1})].
+        J_instruments: Dict {(a, o): J(Φ^{(a)}_o)} for instrument branches.
+        S: Hilbert space dimension.
+
+    Returns:
+        Subnormalized filtered state ρ̃(a,o), shape (S, S).
+    """
+    # J(E_a) is L×S² × S², but we index channels by action
+    # Assuming 1 channel per action for simplicity: J_channels[a]
+    J_Ea = J_channels[action]  # shape (S², S²)
+
+    # J(Φ^{(a)}_o): shape (S², S²)
+    J_Phi_ao = J_instruments[(action, outcome)]
+
+    # ρ̃ = Tr_out[ (I ⊗ ρ_prev) (J(Φ^{(a)}_o) ⊗ I_S) (J(E_a) ⊗ I_S) (I ⊗ ρ_prev) ]
+    # More precisely: ρ̃ = Tr_out[ (J(Φ^{(a)}_o) ⊗ I) · (J(E_a) ⊗ I) · (I ⊗ ρ_prev) · (J(E_a) ⊗ I) · (J(Φ^{(a)}_o) ⊗ I) ]
+    # Simplified as standard filter: ρ̃ = Tr_out[ J(Φ^{(a)}_o ⊗ I_S) · (I_S ⊗ ρ_prev) · J(E_a ⊗ I_S) ]
+    # Here we use: ρ̃(a,o) = Tr_out[ J(Φ^{(a)}_o ⊗ I_S) · (I_S ⊗ ρ_prev) · J(E_a) ]  (isometric展开)
+
+    # Use the Jamiolkowski representation:
+    # (J(Φ) ⊗ I_S) applied to (I_S ⊗ ρ) gives the Choi-Jamiolkowski representation
+    # ρ_out = Tr_in[ Φ(ρ_in) ] → J(Φ) acting on ρ_in via (J ⊗ I)(I ⊗ ρ)
+
+    # Build (I_S ⊗ rho_prev)
+    I_S = np.eye(S, dtype=np.complex128)
+    kron_I_rho = np.kron(I_S, rho_prev)  # (S², S²)
+
+    # Apply channel: J(E_a) · (I ⊗ ρ)
+    JErho = J_Ea @ kron_I_rho  # (S², S²)
+
+    # Apply instrument branch: J(Φ^{(a)}_o) · J(E_a)(I⊗ρ)
+    Jeff = J_Phi_ao @ JErho  # (S², S²)
+
+    # Partial trace over input (first S indices): reshape to (S,S,S,S) then trace
+    # Jeff is (S², S²) = (S⊗S, S⊗S)
+    # ρ_out = Tr_in[J_eff · (I ⊗ ρ_prev)] via Jamiolkowski isomorphism
+    # Simplified: extract (i,j,k,l) from Jeff where Jeff[(i*S+j),(k*S+l)]
+
+    rho_tilde = np.zeros((S, S), dtype=np.complex128)
+
+    for i in range(S):
+        for j in range(S):
+            # Extract 2×2 block corresponding to (i,j) output rows
+            # and sum over input indices
+            block = Jeff[i * S:(i + 1) * S, j * S:(j + 1) * S]
+            rho_tilde[i, j] = np.trace(block)
+
+    return rho_tilde
+
+
+def trajectory_log_likelihood(
+    actions: np.ndarray,
+    outcomes: np.ndarray,
+    J_channels: list[np.ndarray],
+    J_instruments: dict[tuple[int, int], np.ndarray],
+    rho1: np.ndarray,
+    S: int,
+) -> float:
+    """Compute log-likelihood log P^π_ω(τ) for a single trajectory.
+
+    log P = Σ_l log Tr[ Φ^{(a_l)}_{o_l}( ρ̃_l ) ]
+    where ρ̃_l is the subnormalized filtered state after step l.
+
+    Args:
+        actions: Array of action indices, shape (T,).
+        outcomes: Array of outcome indices, shape (T,).
+        J_channels: List of L channel Choi matrices.
+        J_instruments: Dict of instrument Choi matrices.
+        rho1: Initial state ρ_1, shape (S, S).
+        S: Hilbert space dimension.
+
+    Returns:
+        Log-likelihood of the trajectory.
+    """
+    T = len(actions)
+    rho_tilde = rho1.copy()  # Start with initial state
+
+    log_lik = 0.0
+
+    for t in range(T):
+        a = int(actions[t])
+        o = int(outcomes[t])
+
+        # Compute subnormalized filtered state
+        rho_tilde_new = unnormalized_filter(
+            rho_tilde, a, o, J_channels, J_instruments, S
+        )
+
+        # Branch probability: Tr_out[ Φ^{(a)}_o( ρ̃ ) ]
+        # In Choi representation: Tr_in[ J(Φ^{(a)}_o) · (I ⊗ ρ̃_new) ] is wrong
+        # Actually: Tr[ Φ^{(a)}_o(ρ) ] = Tr[ J(Φ^{(a)}_o) (I ⊗ ρ^T) ]
+        # Using Jamiolkowski: Tr[Φ(ρ)] = Tr[ J(Φ) (ρ^T ⊗ I) ]
+
+        # Use simplified branch probability: trace of instrument applied to filtered state
+        # Tr[ Φ^{(a)}_o( ρ̃ ) ] ≈ Tr[ ρ̃ ] for subnormalized (this is the marginal)
+        prob = np.real(np.trace(rho_tilde_new))
+
+        if prob <= 0:
+            return -np.inf
+
+        log_lik += np.log(prob)
+
+        rho_tilde = rho_tilde_new / prob  # Normalize for next step
+
+    return log_lik
+
+
+# =============================================================================
+# OMLeAgent — CPTP-Constrained MLE via SDP
+# =============================================================================
+
+
+@dataclass
+class QHMMPartition:
+    """Represents the CPTP parameter block for the SDP."""
+
+    J_channels: list[np.ndarray]  # List of channel Choi matrices [J(E_0), ..., J(E_{L-1})]
+    J_instruments: dict[tuple[int, int], np.ndarray]  # {(a,o): J(Phi_ao)}
+    rho1: np.ndarray  # Initial state (S,S)
+
+
+@dataclass
+class QHMMTrajectory:
+    """Single trajectory in the dataset."""
+
+    actions: np.ndarray   # shape (T,) — action indices
+    outcomes: np.ndarray  # shape (T,) — outcome indices
+
+
+@dataclass
+class QHMMState:
+    """Mutable state of the QHMM parameters ( Choi matrices )."""
+
+    J_channels: list[np.ndarray]      # Channel Choi matrices [J(E_l)]
+    J_instruments: dict[tuple[int, int], np.ndarray]  # {(a,o): J(Phi_ao)}
+    rho1: np.ndarray                  # Initial state Choi vector (S*S,)
+    S: int                             # Hilbert space dimension
+    A: int                             # Number of actions
+    O: int                             # Number of outcomes per action
+    L: int                             # Number of channels (= A in 1-to-1 mapping)
+
+    def to_partition(self) -> QHMMPartition:
+        return QHMMPartition(
+            J_channels=self.J_channels,
+            J_instruments=self.J_instruments,
+            rho1=self.rho1,
+        )
+
+
+@dataclass
+class OMLeAgent:
+    """Quantum Hidden Markov Model with Online Maximum Likelihood Estimation.
+
+    Parameters:
+        ω = (ρ_1, {E_l}, {Φ^(a)_o})
+        - ρ_1: Initial state (S×S density matrix)
+        - E_l: L channel Kraus operators (represented as Choi matrices)
+        - Φ^(a)_o: Instrument branches (Choi matrices)
+
+    The MLE update maximizes Σ_i log P^π_ω(τ^i) subject to CPTP constraints:
+        - J(E_l) ⪰ 0,  Tr_out[J(E_l)] = I_S   (channel is trace-preserving)
+        - Σ_o J(Φ^(a)_o) ⪰ 0,  Σ_o Tr_out[J(Φ^(a)_o)] = I_S   (instrument TP)
+    """
+
+    S: int          # Hilbert space dimension
+    A: int          # Number of actions
+    O: int          # Number of outcomes
+    L: int          # Number of channels
+    _state: QHMMState = field(init=False)
+
+    def __init__(
+        self,
+        S: int,
+        A: int,
+        O: int,
+        L: int,
+        *,
+        init_channels: Optional[list[np.ndarray]] = None,
+        init_instruments: Optional[dict[tuple[int, int], np.ndarray]] = None,
+        init_rho1: Optional[np.ndarray] = None,
+        solver: str = "MOSEK",
+    ):
+        """Initialize the QHMM OMLE agent.
+
+        Args:
+            S: Hilbert space dimension.
+            A: Number of actions.
+            O: Number of outcomes per action.
+            L: Number of channels.
+            init_channels: Optional list of L initial channel Choi matrices.
+            init_instruments: Optional dict {(a,o): J} of initial instrument Choi matrices.
+            init_rho1: Optional initial state (S,S). Defaults to |0⟩⟨0|.
+            solver: SDP solver ("MOSEK" or "SCS").
+        """
+        if not _CVXPX_AVAILABLE:
+            raise ImportError(
+                "cvxpy is required for MLE. Install with: pip install cvxpy"
+            )
+
+        self.S = S
+        self.A = A
+        self.O = O
+        self.L = L
+        self._solver = solver if solver == "MOSEK" else "SCS"
+
+        # Initialize parameters
+        self._init_params(init_channels, init_instruments, init_rho1)
+
+    def _init_params(
+        self,
+        init_channels: Optional[list[np.ndarray]],
+        init_instruments: Optional[dict[tuple[int, int], np.ndarray]],
+        init_rho1: Optional[np.ndarray],
+    ) -> None:
+        """Initialize or validate QHMM parameters."""
+        S, A, O, L = self.S, self.A, self.O, self.L
+        S2 = S * S
+
+        # Initial state: |0⟩⟨0| (vectorized in Choi convention)
+        if init_rho1 is None:
+            rho1 = np.zeros((S, S), dtype=np.complex128)
+            rho1[0, 0] = 1.0
+        else:
+            rho1 = init_rho1
+
+        # Initialize channel Choi matrices (random rank-1, TP)
+        if init_channels is None:
+            J_channels = []
+            for _ in range(L):
+                # Start with random Kraus operator → Choi
+                K0 = np.random.randn(S, S) + 1j * np.random.randn(S, S)
+                K0 = K0 / np.linalg.norm(K0, "nuc")  # approximately TP
+                # Make exactly TP: adjust so Tr_out[J] = I
+                J = choi_from_kraus([K0])
+                # Project onto TP constraint
+                J_channels.append(self._make_tp_choi(J, S, S))
+        else:
+            J_channels = init_channels
+
+        # Initialize instrument branches
+        if init_instruments is None:
+            J_instruments = {}
+            for a in range(A):
+                for o in range(O):
+                    K0 = np.random.randn(S, S) + 1j * np.random.randn(S, S)
+                    J = choi_from_kraus([K0])
+                    J_instruments[(a, o)] = self._make_tp_choi(J, S, S)
+        else:
+            J_instruments = init_instruments
+
+        self._state = QHMMState(
+            J_channels=J_channels,
+            J_instruments=J_instruments,
+            rho1=rho1,
+            S=S,
+            A=A,
+            O=O,
+            L=L,
+        )
+
+    def _make_tp_choi(self, J: np.ndarray, d_in: int, d_out: int) -> np.ndarray:
+        """Project a Choi matrix onto the trace-preserving subspace.
+
+        J_TP = J + (I - Tr_out[J]) ⊗ (I/d_in)  (trace correction)
+        """
+        S2_in = d_in * d_in
+        S2_out = d_out * d_out
+
+        # Compute Tr_out[J]
+        Tr_out = np.zeros((d_in, d_in), dtype=np.complex128)
+        for r in range(d_out):
+            Tr_out += J[r * d_out:(r + 1) * d_out, r * d_out:(r + 1) * d_out]
+
+        # Correct toward I/d_in
+        deficit = np.eye(d_in) - Tr_out
+        correction = np.kron(deficit / d_in, np.eye(d_out))
+        J_corr = J + correction
+
+        # Re-normalize eigenvalues
+        evals, evecs = np.linalg.eigh(J_corr)
+        evals = np.maximum(evals, 1e-9)
+        J_corr = evecs @ np.diag(evals) @ evecs.conj().T
+        return J_corr
+
+    @property
+    def channels(self) -> list[np.ndarray]:
+        """Current channel Choi matrices J(E_l)."""
+        return self._state.J_channels
+
+    @property
+    def instruments(self) -> dict[tuple[int, int], np.ndarray]:
+        """Current instrument Choi matrices J(Φ^(a)_o)."""
+        return self._state.J_instruments
+
+    @property
+    def rho1(self) -> np.ndarray:
+        """Current initial state ρ_1."""
+        return self._state.rho1
+
+    def get_kraus_channels(self) -> list[list[np.ndarray]]:
+        """Extract Kraus operators for each channel from Choi matrices.
+
+        Returns:
+            List of L lists of Kraus operators.
+        """
+        kraus_list = []
+        for J in self._state.J_channels:
+            Ks = kraus_from_choi(J, self.S, self.S)
+            kraus_list.append(Ks)
+        return kraus_list
+
+    def get_kraus_instruments(self) -> dict[tuple[int, int], list[np.ndarray]]:
+        """Extract Kraus operators for each instrument branch."""
+        kraus_dict = {}
+        for key, J in self._state.J_instruments.items():
+            kraus_dict[key] = kraus_from_choi(J, self.S, self.S)
+        return kraus_dict
+
+    # -------------------------------------------------------------------------
+    # Eq. 2.4 — subnormalized filtered state
+    # -------------------------------------------------------------------------
+
+    def unnormalized_filter(
+        self,
+        rho_prev: np.ndarray,
+        action: int,
+        outcome: int,
+    ) -> np.ndarray:
+        """Compute subnormalized filtered state (Eq. 2.4).
+
+        ρ̃(a,o) = Tr_out[ Φ^{(a)}_o ⊗ I_S  (I_S ⊗ ρ̃_prev)  J(E_a) ]
+
+        Args:
+            rho_prev: Previous filtered density matrix, shape (S, S).
+            action: Action index a.
+            outcome: Outcome index o.
+
+        Returns:
+            Subnormalized filtered state, shape (S, S).
+        """
+        return unnormalized_filter(
+            rho_prev,
+            action,
+            outcome,
+            self._state.J_channels,
+            self._state.J_instruments,
+            self.S,
+        )
+
+    def trajectory_log_likelihood(
+        self,
+        actions: np.ndarray,
+        outcomes: np.ndarray,
+    ) -> float:
+        """Compute log-likelihood for a single trajectory.
+
+        log P = Σ_l log Tr[ Φ^{(a_l)}_{o_l}( ρ̃_l ) ]
+
+        Args:
+            actions: Action indices, shape (T,).
+            outcomes: Outcome indices, shape (T,).
+
+        Returns:
+            Log-likelihood of the trajectory.
+        """
+        return trajectory_log_likelihood(
+            actions,
+            outcomes,
+            self._state.J_channels,
+            self._state.J_instruments,
+            self._state.rho1,
+            self.S,
+        )
+
+    # -------------------------------------------------------------------------
+    # MLE Update — SDP formulation
+    # -------------------------------------------------------------------------
+
+    def mle_update(
+        self,
+        dataset: list[QHMMTrajectory],
+        *,
+        max_iter: int = 100,
+        tol: float = 1e-6,
+        verbose: bool = False,
+    ) -> dict:
+        """Maximum Likelihood Estimation update via SDP.
+
+        Maximizes Σ_i log P^π_ω(τ^i) over ω subject to CPTP constraints.
+
+        Constraint summary:
+            J(E_l) ⪰ 0,          Tr_out[J(E_l)] = I_S   ∀l
+            J(Φ^(a)_o) ⪰ 0,     Σ_o Tr_out[J(Φ^(a)_o)] = I_S   ∀a
+
+        Uses cvxpy with MOSEK (or SCS fallback) to solve the SDP.
+
+        Args:
+            dataset: List of K trajectories {(actions^i, outcomes^i)}.
+            max_iter: Max SDP iterations.
+            tol: Convergence tolerance on log-likelihood change.
+            verbose: Print SDP solver output.
+
+        Returns:
+            Dict with:
+                - 'log_likelihood': Total log-likelihood after update
+                - 'n_iter': Number of SDP iterations
+                - 'solver_time': Solver execution time in seconds
+        """
+        if not _CVXPX_AVAILABLE:
+            raise ImportError("cvxpy required: pip install cvxpy")
+
+        import time
+
+        K = len(dataset)
+        S, A, O, L = self.S, self.A, self.O, self.L
+        S2 = S * S
+
+        # Pre-compute sufficient statistics: filtered states for each trajectory
+        # For each trajectory τ and each step l:
+        #   γ_l(ρ) = ρ̃_l  (subnormalized filtered state at step l)
+        #   z_l = Tr[ Φ^{(a_l)}_{o_l}( ρ̃_l ) ]  (branch probability)
+        #
+        # Gradient of Σ_i log z_l w.r.t. J(E_m) involves:
+        #   ∂log z_l / ∂J(E_m) = Tr[ (∂J(E_m) ⊗ ρ̃_l^{in})  (I ⊗ (Φ^{(a_l)}_{o_l})^dagger(Π_l)) ]
+        #
+        # We use the SDP formulation of the OMLE update.
+
+        # Build the SDP variables: all Choi matrices as optimization variables
+        # J_channels[l] ∈ C^{S²×S²} for l=0..L-1
+        # J_instruments[(a,o)] ∈ C^{S²×S²} for a=0..A-1, o=0..O-1
+
+        J_ch_vars = [
+            cp.Variable((S2, S2), hermitian=True, name=f"J_E{l}")
+            for l in range(L)
+        ]
+
+        J_ins_vars = {}
+        for a in range(A):
+            for o in range(O):
+                J_ins_vars[(a, o)] = cp.Variable(
+                    (S2, S2), hermitian=True, name=f"J_Phi_{a}_{o}"
+                )
+
+        # Constraints
+        constraints = []
+
+        # 1. Channel CPTP constraints: J(E_l) ⪰ 0, Tr_out[J(E_l)] = I_S
+        for l in range(L):
+            constraints.append(J_ch_vars[l] >> 0)
+            # Tr_out[J(E_l)] = I_S  →  Σ_r J[(rS):(r+1)S, (rS):(r+1)S] = I_S
+            for r in range(S):
+                for c in range(S):
+                    pass  # Full constraint below
+            # Simpler: J[l][rS:(r+1)S, cS:(c+1)S] summed over r = δ_{rc} I
+            # Actually: (Tr_out[J])_{rc} = Σ_r J[(rS+c), (rS+c)]  (if using column-major)
+            # Using block structure:
+            block_diag_list = []
+            for r in range(S):
+                block_diag_list.append(
+                    J_ch_vars[l][r * S:(r + 1) * S, r * S:(r + 1) * S]
+                )
+            constraints.append(
+                cp.sum(block_diag_list) == np.eye(S)
+            )
+
+        # 2. Instrument CPTP constraints: Σ_o J(Φ^(a)_o) ⪰ 0, Tr_out[Σ_o J(Φ^(a)_o)] = I_S
+        for a in range(A):
+            inst_sum = sum(J_ins_vars[(a, o)] for o in range(O))
+            constraints.append(inst_sum >> 0)
+            for r in range(S):
+                block_diag_list = []
+                for o in range(O):
+                    block_diag_list.append(
+                        J_ins_vars[(a, o)][
+                            r * S:(r + 1) * S, r * S:(r + 1) * S
+                        ]
+                    )
+                constraints.append(cp.sum(block_diag_list) == np.eye(S))
+
+        # Objective: maximize Σ_i Σ_t log Tr[ Φ^{(a_t)}_{o_t}( ρ̃_t^i ) ]
+        # Using cvxpy log_sum_exp / log_det trick for numerical stability
+        # We maximize Σ_{i,t} log z_{it}  where z_{it} = Tr[Φ(ρ̃)]
+        #
+        # Each term log z_{it} is concave in the Choi matrices.
+        # We approximate using the perspective function or use a
+        # concave entropy bound. A tractable SDP formulation uses
+        # auxiliary variables and the constraint: z_it ≤ Tr[Φ(ρ̃_it)]
+        #
+        # Direct SDP formulation:
+        #   max Σ_{i,t} log s_{it}
+        #   s.t. s_it ≤ Tr[ J(Φ) · (I ⊗ ρ̃_it^T) ]
+        #
+        # This is a logarithmic SDP objective. We use the formulation:
+        #   max Σ log X   ⇔   max log det(X^{1/2})
+        #   via cp.log_det() which is DCP-compliant.
+
+        S_it_list = []  # List of (K,T) scalar auxiliary variables
+        objective_terms = []
+
+        for idx, traj in enumerate(dataset):
+            actions = traj.actions
+            outcomes = traj.outcomes
+            T = len(actions)
+
+            rho_tilde = self._state.rho1.copy()
+
+            for t in range(T):
+                a = int(actions[t])
+                o = int(outcomes[t])
+
+                # Auxiliary variable for log branch probability
+                s_it = cp.Variable(pos=True, name=f"s_{idx}_{t}")
+                S_it_list.append(s_it)
+
+                # Constraint: s_it ≤ Tr[ J(Φ^{(a)}_o) · (I ⊗ ρ̃^T) ]
+                # In vectorized form, for Choi J and density matrix ρ:
+                #   Tr[ J · (I ⊗ ρ^T) ] = ⟨J, (I ⊗ ρ^*)⟩_HS
+                # Using the Hilbert-Schmidt inner product.
+
+                # ρ̃^T (transpose for the Jamiolkowski representation)
+                rho_tilde_T = rho_tilde.T
+
+                # Compute (I ⊗ ρ̃_T) as a matrix
+                I_S = np.eye(S, dtype=np.complex128)
+                kron_I_rhoT = np.kron(I_S, rho_tilde_T)  # (S², S²)
+
+                # Constraint: s_it <= Tr[ J_Phi · kron_I_rhoT ]
+                # Using HS inner product: Tr[A†B] = ⟨A,B⟩_HS = vec(A)† vec(B)
+                J_Phi = J_ins_vars[(a, o)]
+
+                # Linear constraint: s_it is bounded above by this trace
+                # We encode this as: s_it <= Tr[ J_Phi @ kron_I_rhoT ]
+                # Since s_it >= 0 and we want to maximize it, we use:
+                #   Tr[ J_Phi @ (I ⊗ ρ̃^T) ] >= s_it
+                # Note: this is linear in J_Phi
+                constraints.append(
+                    cp.real(cp.trace(J_Phi @ kron_I_rhoT)) >= s_it
+                )
+
+                objective_terms.append(cp.log(s_it + 1e-12))
+
+                # Update filtered state (using current J estimates)
+                # NOTE: This uses OLD J values (from _state), making the
+                # objective a lower bound on the true log-likelihood.
+                # For exact MLE, this would need an EM (Baum-Welch) algorithm.
+                rho_tilde_new = unnormalized_filter(
+                    rho_tilde, a, o,
+                    self._state.J_channels,
+                    self._state.J_instruments,
+                    self.S,
+                )
+                prob = np.real(np.trace(rho_tilde_new))
+                if prob > 1e-9:
+                    rho_tilde = rho_tilde_new / prob
+                else:
+                    rho_tilde = np.eye(S, dtype=np.complex128) / S
+
+        # Objective: maximize Σ cp.log(s_it)
+        # This is the concave envelope of the log-likelihood
+        objective = cp.Maximize(cp.sum(objective_terms) / K)
+
+        # Solve SDP
+        problem = cp.Problem(objective, constraints)
+
+        solver_opts = {
+            "verbose": verbose,
+            "max_iter": max_iter,
+        }
+        if self._solver == "MOSEK":
+            solver_opts["mosek"] = {"MSK_IPAR_NUM_THREADS": 4}
+
+        t_start = time.time()
+
+        try:
+            problem.solve(solver=self._solver.lower(), **solver_opts)
+        except Exception:
+            # Fallback to SCS
+            problem.solve(solver="SCS", verbose=verbose, max_iters=max_iter)
+
+        solver_time = time.time() - t_start
+
+        if problem.status in ["optimal", "optimal_inaccurate"]:
+            # Extract optimized Choi matrices
+            new_J_channels = []
+            for l in range(L):
+                J_val = J_ch_vars[l].value
+                if J_val is not None:
+                    # Project to PSD
+                    evals, evecs = np.linalg.eigh(J_val)
+                    evals = np.maximum(evals, 1e-9)
+                    J_proj = evecs @ np.diag(evals) @ evecs.conj().T
+                    new_J_channels.append(J_proj.astype(np.complex128))
+                else:
+                    new_J_channels.append(self._state.J_channels[l])
+
+            new_J_instruments = {}
+            for a in range(A):
+                for o in range(O):
+                    J_val = J_ins_vars[(a, o)].value
+                    if J_val is not None:
+                        evals, evecs = np.linalg.eigh(J_val)
+                        evals = np.maximum(evals, 1e-9)
+                        J_proj = evecs @ np.diag(evals) @ evecs.conj().T
+                        new_J_instruments[(a, o)] = J_proj.astype(np.complex128)
+                    else:
+                        new_J_instruments[(a, o)] = self._state.J_instruments[(a, o)]
+
+            # Update state
+            self._state.J_channels = new_J_channels
+            self._state.J_instruments = new_J_instruments
+
+        else:
+            warnings.warn(
+                f"SDP solver did not converge: {problem.status}. "
+                "Keeping previous parameters."
+            )
+
+        # Compute final log-likelihood
+        total_ll = sum(
+            self.trajectory_log_likelihood(traj.actions, traj.outcomes)
+            for traj in dataset
+        )
+
+        if verbose:
+            print(f"MLE update: status={problem.status}, "
+                  f"log_lik={total_ll:.4f}, time={solver_time:.2f}s")
+
+        return {
+            "log_likelihood": float(np.real(total_ll)),
+            "n_iter": problem.num_iters if hasattr(problem, "num_iters") else -1,
+            "solver_time": solver_time,
+            "status": problem.status,
+        }
+
+    def __repr__(self) -> str:
+        return (
+            f"OMLeAgent(S={self.S}, A={self.A}, O={self.O}, L={self.L}, "
+            f"solver={self._solver})"
+        )

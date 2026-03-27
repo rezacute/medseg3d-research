@@ -32,6 +32,7 @@ dependencies = [
     "pyyaml>=6.0",
     "hypothesis>=6.0",
     "pandas>=2.0",
+    "cvxpy>=1.5",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +49,9 @@ cudaq = [
 gpu = [
     "cuda-quantum>=0.9",
     "pennylane-lightning-gpu>=0.39",
+]
+mosek = [
+    "mosek>=10.1",
 ]
 
 [project.urls]
