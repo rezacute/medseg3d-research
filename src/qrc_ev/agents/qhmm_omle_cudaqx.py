@@ -963,6 +963,85 @@ def hs_unvectorize(v: np.ndarray, basis: list[np.ndarray]) -> np.ndarray:
     return rho
 
 
+def compute_kappa_uc(
+    R: np.ndarray, S: int, O: int, verbose: bool = False
+) -> float:
+    """Compute the CB-norm (completely-bounded norm) of the recovery map R^(a).
+
+    The CB-norm of a map Φ: M_n → M_m is:
+        ||Φ||_cb = ||id_n ⊗ Φ||_∞
+
+    This equals the minimum t solving the SDP (Watrous 2009, Theorem 3.44):
+        ||Φ||_cb = min t  subject to  [[t·I_{S²}, J(Φ)], [J(Φ)†, t·I_{S²}]] ⪰ 0
+
+    where I_{S²} is the S²×S² identity and J(Φ) is the Choi matrix of Φ
+    in the Jamiołkowski representation.
+
+    The recovery map R^(a): M_S → M_S maps an HS vector to a density matrix.
+    Its Choi matrix is built using the Jamiołkowski convention:
+        J(R^(a))[j·S+i, l·S+k] = ⟨i,j| R^(a)(|k⟩⟨l|) |i,j⟩
+                               = R^(a)(E_{kl})[i,j]
+
+    For the identity recovery map (R^(a) = id), this gives J = SWAP and
+    ||R^(a)||_cb = S (Watrous 2009). The minimum cb-norm for any TP map is S,
+    achieved by the identity (perfect recovery with no undercompleteness).
+
+    Args:
+        R: Recovery map matrix of shape (S², S²).
+            R @ vec(E_{kl}) = vec(R^(a)(E_{kl})) where E_{kl} is row-major.
+        S: Hilbert space dimension.
+        O: Number of outcomes (used for display only).
+        verbose: If True, prints SDP solver output.
+
+    Returns:
+        κ_uc = ||R^(a)||_cb  (scalar ≥ S for TP maps).
+    """
+    if not _CVXPX_AVAILABLE:
+        raise ImportError("cvxpy is required for CB-norm computation")
+
+    S2 = S * S
+
+    # Build Choi matrix of R^(a) using Jamiołkowski convention:
+    # J[j·S+i, l·S+k] = ⟨i,j| R^(a)(|k⟩⟨l|) |i,j⟩ = R^(a)(E_{kl})[i,j]
+    # where E_{kl} = |k⟩⟨l| and the result is indexed [row, col].
+    J = np.zeros((S2, S2), dtype=np.complex128)
+    for k in range(S):
+        for l in range(S):
+            # E_{kl}: matrix with 1 at (k,l), 0 elsewhere
+            E_kl = np.zeros((S, S), dtype=np.complex128)
+            E_kl[k, l] = 1.0
+            # R^(a)(E_{kl}) via matrix multiply, then reshape
+            R_Ekl_vec = R @ E_kl.reshape(-1)  # vec in row-major order
+            R_Ekl_mat = R_Ekl_vec.reshape(S, S)  # reshape row-major
+            # J[j·S+i, l·S+k] = R^(a)(E_{kl})[i,j]
+            for i in range(S):
+                for j in range(S):
+                    row = j * S + i
+                    col = l * S + k
+                    J[row, col] = R_Ekl_mat[i, j]
+
+    # CB-norm SDP: min t  s.t.  [[t·I_{S²}, J], [J†, t·I_{S²}]] ⪰ 0
+    # For the identity map (R = I): J = SWAP, giving ||id||_cb = S.
+    t_var = cp.Variable()
+    I_S2 = np.eye(S2, dtype=np.complex128)
+    block = cp.bmat([[t_var * I_S2, J], [J.conj().T, t_var * I_S2]])
+    constraints = [block >> 0]
+    problem = cp.Problem(cp.Minimize(t_var), constraints)
+
+    try:
+        problem.solve(solver="SCS", verbose=verbose, max_iters=5000)
+    except Exception:
+        problem.solve(solver="SCS", verbose=False, max_iters=10000)
+
+    if problem.status in ["optimal", "optimal_inaccurate"]:
+        kappa = float(np.real(t_var.value))
+        return max(kappa, 1.0)  # CB norm ≥ 1 for TP maps
+    else:
+        # Fallback: use spectral norm of J
+        spectral = np.max(np.abs(np.linalg.eigvalsh(J.real)))
+        return float(spectral)
+
+
 def kraus_apply(rho: np.ndarray, kraus_ops: list[np.ndarray]) -> np.ndarray:
     """Apply a Kraus map to a density matrix.
 
@@ -1066,24 +1145,34 @@ class OOMModel:
             self._rho1 = rho1
 
         # Pre-build recovery maps: one per action
-        self._recovery_maps = self._build_recovery_maps()
+        self._recovery_maps, self.kappa_uc_per_action = self._build_recovery_maps()
 
-    def _build_recovery_maps(self) -> dict[int, np.ndarray]:
-        """Build recovery maps R^(a) for each action.
+    def _build_recovery_maps(self) -> tuple[dict[int, np.ndarray], dict[int, float]]:
+        """Build recovery maps R^(a) for each action and compute CB-norm κ_uc.
 
         R^(a): ℝ^{S²} → M_S  given by  R^(a)(e_ν) = P_ν  (the ν-th basis matrix).
         Returns dict mapping action index → recovery matrix of shape (S², S²).
 
         The recovery matrix R_a satisfies  R_a @ vec(P_ν) = P_ν  (as a matrix).
+
+        Also computes κ_uc = ||R^(a)||_cb (CB-norm) per action, encoding the
+        undercompleteness robustness: higher κ_uc means recovery is more
+        sensitive to deviations from the undercomplete assumption.
         """
-        R = {}
+        R_maps = {}
+        kappa_uc = {}
+
         for a in range(self.A):
             # R_a[:, ν] = vec(P_ν) — each column is the vectorized basis matrix
             R_a = np.zeros((self.S2, self.S2), dtype=np.complex128)
             for nu, P_nu in enumerate(self._basis):
                 R_a[:, nu] = P_nu.reshape(-1)
-            R[a] = R_a
-        return R
+            R_maps[a] = R_a
+
+            # Compute CB-norm of the recovery map
+            kappa_uc[a] = compute_kappa_uc(R_a, self.S, self.O)
+
+        return R_maps, kappa_uc
 
     def vec_to_state(self, v: np.ndarray, action: int) -> np.ndarray:
         """Recover a density matrix from its HS vector using action-specific recovery.
