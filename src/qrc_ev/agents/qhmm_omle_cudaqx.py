@@ -84,20 +84,23 @@ def kraus_from_choi(J: np.ndarray, d_in: int, d_out: int) -> list[np.ndarray]:
 
     Returns:
         List of Kraus operators K_i, each shape (d_out, d_in).
-        These satisfy Σ_i K_i† K_i = I_{d_in} / d_in  (TP under choi_from_kraus convention).
+        These satisfy Σ_i K_i† K_i = I_{d_in}  (properly trace-preserving).
     """
     # Eigenvalue decomposition
     eigenvalues, eigenvectors = np.linalg.eigh(J)
 
     # Keep only positive eigenvalues (numerical PSD enforcement)
-    # Rescale so that Σ K†K = I/d_in (TP constraint)
+    # From J = Σ_i λ_i |v_i⟩⟩⟨⟨v_i| ( Jamiołkowski convention),
+    # the TP Kraus operators are:
+    # K_i = sqrt(λ_i) · vec_inv(|v_i⟩⟩)  (reshaped to d_out×d_in)
+    # This gives Σ_i K_i† K_i = I (TP).
     Ks = []
     for i in range(len(eigenvalues)):
         lam = eigenvalues[i]
         if lam > 1e-9:
             v = eigenvectors[:, i]
-            # Rescale: sqrt(λ/d_in) gives Kraus operators with ΣK†K = I/d_in
-            K = v.reshape(d_out, d_in) * np.sqrt(lam / d_in)
+            # K = sqrt(λ) · vec_inv(v)  (proper TP normalization)
+            K = v.reshape(d_out, d_in) * np.sqrt(lam)
             Ks.append(K)
 
     return Ks if Ks else [np.zeros((d_out, d_in), dtype=np.complex128)]
@@ -522,6 +525,34 @@ class OMLeAgent:
             kraus_dict[key] = kraus_from_choi(J, self.S, self.S)
         return kraus_dict
 
+    def set_kraus_operators(
+        self,
+        kraus_channels: Optional[list[list[np.ndarray]]] = None,
+        kraus_instruments: Optional[dict[tuple[int, int], list[np.ndarray]]] = None,
+    ) -> None:
+        """Set Kraus operators directly (bypasses Choi extraction).
+
+        This is useful for the OOM model which needs the raw Kraus operators
+        with ΣK†K = I (TP) rather than the Choi-extracted versions which
+        have ΣK†K = I/S.
+
+        Args:
+            kraus_channels: List of L lists of Kraus operators for channels.
+            kraus_instruments: Dict {(a,o): [K_list]} for instruments.
+        """
+        if kraus_channels is not None:
+            self._kraus_channels_raw = kraus_channels
+            # Also update Choi matrices in state
+            for l, Ks in enumerate(kraus_channels):
+                J = choi_from_kraus(Ks)
+                self._state.J_channels[l] = J
+
+        if kraus_instruments is not None:
+            self._kraus_instruments_raw = kraus_instruments
+            for key, Ks in kraus_instruments.items():
+                J = choi_from_kraus(Ks)
+                self._state.J_instruments[key] = J
+
     # -------------------------------------------------------------------------
     # Eq. 2.4 — subnormalized filtered state
     # -------------------------------------------------------------------------
@@ -847,3 +878,415 @@ class OMLeAgent:
             f"OMLeAgent(S={self.S}, A={self.A}, O={self.O}, L={self.L}, "
             f"solver={self._solver})"
         )
+
+
+# =============================================================================
+# OOModel — Observable Operator Model for QHMM
+# =============================================================================
+
+
+def _make_hs_basis(d: int) -> list[np.ndarray]:
+    """Build the unnormalized matrix-unit HS basis {P_μ} for d-dimensional systems.
+
+    Basis elements: P_{i,j} = |i⟩⟨j|  for i,j=0,...,d-1
+    Total: d² basis elements.
+
+    Properties:
+    - ⟨P_{kl}, P_{ij}⟩_HS = Tr[P_{kl}† P_{ij}] = δ_{ki}δ_{lj}  (orthonormal)
+    - ρ = Σ_μ v_μ P_μ  where v_μ = ⟨P_μ, ρ⟩_HS = Tr[P_μ† ρ]
+    - Tr[P_{ij}] = δ_{ij}
+    - Tr[ρ] = Σ_μ v_μ Tr[P_μ] = v_{0,0} + ... but since Tr[P_{ij}] = δ_ij:
+        actually Σ_μ v_μ = Σ_{ij} Tr[P_{ij} ρ] = Tr[(Σ_ij P_{ij}) ρ] = Tr[J ρ] = Tr[ρ]
+        where J is the all-ones matrix.
+      More directly: v_{ij} = Tr[P_{ij} ρ] = ρ_{ji}, so Σ_{ij} v_{ij} = Σ_{ij} ρ_{ji} = d·Tr[ρ].
+    - With this basis, sum(hs_vectorize(ρ)) = d·Tr[ρ], so probability = sum(v) / d.
+
+    Args:
+        d: Hilbert space dimension.
+
+    Returns:
+        List of d² basis matrices, each shape (d, d).
+    """
+    basis = []
+    for i in range(d):
+        for j in range(d):
+            P = np.zeros((d, d), dtype=np.complex128)
+            P[i, j] = 1.0  # unnormalized matrix units
+            basis.append(P)
+    return basis
+
+
+def hs_inner_product(P: np.ndarray, Q: np.ndarray) -> complex:
+    """Hilbert-Schmidt inner product: ⟨P, Q⟩_HS = Tr[P† Q].
+
+    Args:
+        P: Matrix of shape (d, d).
+        Q: Matrix of shape (d, d).
+
+    Returns:
+        Complex inner product Tr[P† Q].
+    """
+    return np.trace(P.conj().T @ Q)
+
+
+def hs_vectorize(rho: np.ndarray, basis: list[np.ndarray]) -> np.ndarray:
+    """Vectorize a density matrix in the orthonormal HS basis.
+
+    v_μ = ⟨P_μ, ρ⟩_HS = Tr[P_μ† ρ]
+
+    Args:
+        rho: Density matrix, shape (d, d).
+        basis: Orthonormal HS basis list of d² matrices.
+
+    Returns:
+        Real vector of length d².
+    """
+    return np.array([np.real(hs_inner_product(P, rho)) for P in basis])
+
+
+def hs_unvectorize(v: np.ndarray, basis: list[np.ndarray]) -> np.ndarray:
+    """Recover a density matrix from its HS vector (orthonormal basis).
+
+    ρ = Σ_μ v_μ P_μ  (since basis is orthonormal, this is exact)
+
+    Args:
+        v: HS vector, shape (d²,).
+        basis: Orthonormal HS basis list.
+
+    Returns:
+        Density matrix, shape (d, d).
+    """
+    d = basis[0].shape[0]
+    rho = np.zeros((d, d), dtype=np.complex128)
+    for mu, P_mu in enumerate(basis):
+        rho += v[mu] * P_mu
+    return rho
+
+
+def kraus_apply(rho: np.ndarray, kraus_ops: list[np.ndarray]) -> np.ndarray:
+    """Apply a Kraus map to a density matrix.
+
+    ρ_out = Σ_k K_k ρ K_k†
+
+    Args:
+        rho: Input density matrix, shape (d, d).
+        kraus_ops: List of Kraus operators, each shape (d, d).
+
+    Returns:
+        Output density matrix.
+    """
+    rho_out = np.zeros_like(rho)
+    for K in kraus_ops:
+        rho_out += K @ rho @ K.conj().T
+    return rho_out
+
+
+class OOMModel:
+    """Observable Operator Model for a Quantum Hidden Markov Model.
+
+    Represents the QHMM dynamics as linear operators on the Hilbert-Schmidt
+    vector space of density matrices.
+
+    OOM State:
+        v ∈ ℝ^{S²} — HS vector of the filtered density matrix.
+        v_μ = Tr[P_μ† ρ]  for basis {P_μ}.
+
+    OOM Transition (Eq. from task):
+        A(o, a, a')[μ,ν] = Σ_{o'} Tr[ P_μ · Φ^(a')_{o'} ∘ E ∘ Φ^(a)_o ( P_ν ) ]
+
+        where the sum over o' is the "classical trace" (Kraus sum over next-outcome
+        instruments), and the inner trace is over the Hilbert space.
+
+    For a trajectory τ = (a_1,o_1, ..., a_T,o_T):
+        P(τ) = Σ_μ v_T[μ]  where v_T = A(o_T,a_T,a_{T+1}) · ... · A(o_1,a_1,a_2) @ v_1
+        and v_1 = hs_vectorize(ρ_1).
+
+    Parameters:
+        S: Hilbert space dimension.
+        A: Number of actions.
+        O: Number of outcomes.
+        L: Number of channels.
+        omle_agent: OMLeAgent providing the QHMM parameters.
+    """
+
+    def __init__(
+        self,
+        S: int,
+        A: int,
+        O: int,
+        L: int,
+        omle_agent: Optional["OMLeAgent"] = None,
+    ):
+        """Initialize the OOM model.
+
+        Args:
+            S: Hilbert space dimension.
+            A: Number of actions.
+            O: Number of outcomes.
+            L: Number of channels.
+            omle_agent: Optional OMLeAgent. If provided, extracts Kraus operators
+                and rho1 from it. Otherwise uses identity channels as defaults.
+        """
+        self.S = S
+        self.A = A
+        self.O = O
+        self.L = L
+        self.S2 = S * S
+
+        # Build HS basis
+        self._basis = _make_hs_basis(S)
+        self._P_list = self._basis
+
+        # Initialize from OMLeAgent or use identity channels
+        if omle_agent is not None:
+            # Try to use raw Kraus operators first (TP-normalized), fall back to
+            # extracted ones
+            raw_ch = getattr(omle_agent, '_kraus_channels_raw', None)
+            raw_ins = getattr(omle_agent, '_kraus_instruments_raw', None)
+            if raw_ch is not None:
+                self._kraus_channels = raw_ch
+            else:
+                # Use extracted Choi-Kraus (ΣK†K = I/S convention)
+                self._kraus_channels = omle_agent.get_kraus_channels()
+            if raw_ins is not None:
+                self._kraus_instruments = raw_ins
+            else:
+                self._kraus_instruments = omle_agent.get_kraus_instruments()
+            self._rho1 = omle_agent.rho1
+        else:
+            # Default: identity channels (raw Kraus with K=I)
+            K_I = np.eye(S, dtype=np.complex128)
+            self._kraus_channels = [[K_I] for _ in range(L)]
+            self._kraus_instruments = {
+                (a, o): [K_I] for a in range(A) for o in range(O)
+            }
+            rho1 = np.zeros((S, S), dtype=np.complex128)
+            rho1[0, 0] = 1.0
+            self._rho1 = rho1
+            self._rho1 = rho1
+
+        # Pre-build recovery maps: one per action
+        self._recovery_maps = self._build_recovery_maps()
+
+    def _build_recovery_maps(self) -> dict[int, np.ndarray]:
+        """Build recovery maps R^(a) for each action.
+
+        R^(a): ℝ^{S²} → M_S  given by  R^(a)(e_ν) = P_ν  (the ν-th basis matrix).
+        Returns dict mapping action index → recovery matrix of shape (S², S²).
+
+        The recovery matrix R_a satisfies  R_a @ vec(P_ν) = P_ν  (as a matrix).
+        """
+        R = {}
+        for a in range(self.A):
+            # R_a[:, ν] = vec(P_ν) — each column is the vectorized basis matrix
+            R_a = np.zeros((self.S2, self.S2), dtype=np.complex128)
+            for nu, P_nu in enumerate(self._basis):
+                R_a[:, nu] = P_nu.reshape(-1)
+            R[a] = R_a
+        return R
+
+    def vec_to_state(self, v: np.ndarray, action: int) -> np.ndarray:
+        """Recover a density matrix from its HS vector using action-specific recovery.
+
+        ρ = R^(a) @ v  (equivalent to hs_unvectorize since basis = recovery)
+
+        Args:
+            v: HS vector, shape (S²,).
+            action: Action index for the recovery map.
+
+        Returns:
+            Density matrix, shape (S, S).
+        """
+        R_a = self._recovery_maps[action]
+        rho_flat = R_a @ v.astype(np.complex128)
+        return rho_flat.reshape(self.S, self.S)
+
+    def build_A_operator(
+        self,
+        channel_kraus: list[np.ndarray],
+        instrument_a: dict[int, list[np.ndarray]],
+        instrument_a_next: dict[int, list[np.ndarray]],
+        action: int,
+        outcome: int,
+        action_next: int,
+    ) -> np.ndarray:
+        """Build the OOM transition operator A(o, a, a').
+
+        Computes:
+            A(o,a,a')[μ,ν] = Σ_{o'} Tr[ P_μ · Φ^(a')_{o'} ∘ E ∘ Φ^(a)_o ( P_ν ) ]
+
+        where:
+        - P_μ, P_ν are HS basis matrices
+        - Φ^(a)_o has Kraus operators instrument_a[outcome]
+        - E has Kraus operators channel_kraus
+        - Φ^(a')_{o'} has Kraus operators instrument_a_next[o']
+        - The sum over o' is the "classical trace" (Kraus sum over next outcomes)
+
+        Args:
+            channel_kraus: Kraus operators for the channel E_l.
+            instrument_a: Dict {outcome: [K_k]} for action a (Φ^(a)_o).
+            instrument_a_next: Dict {outcome: [K_j]} for action a' (Φ^(a')_{o'}).
+            action: Current action index a.
+            outcome: Observed outcome index o.
+            action_next: Next action index a'.
+
+        Returns:
+            A: (S², S²) real matrix — OOM transition operator.
+        """
+        S = self.S
+        S2 = self.S2
+        basis = self._P_list
+
+        # Get Kraus operators for current (action, outcome)
+        kraus_a = instrument_a.get(outcome, [np.eye(S, dtype=np.complex128)])
+        if not kraus_a:
+            kraus_a = [np.eye(S, dtype=np.complex128)]
+
+        # Get Kraus operators for next action's outcomes
+        kraus_a_next_by_outcome = {}
+        for o_next in instrument_a_next:
+            kraus_a_next_by_outcome[o_next] = instrument_a_next.get(
+                o_next, [np.eye(S, dtype=np.complex128)]
+            )
+
+        # Initialize A matrix (real)
+        A = np.zeros((S2, S2), dtype=np.float64)
+
+        # For each column ν (basis vector e_ν → P_ν as density matrix)
+        for nu, P_nu in enumerate(basis):
+            # Step 1: Recover quantum state from e_ν
+            # ρ_ν = R^(a)(e_ν) = P_ν
+            rho_nu = P_nu.copy()
+
+            # Step 2: Apply Φ^(a)_o (current instrument, observed outcome)
+            rho_after_instrument = kraus_apply(rho_nu, kraus_a)
+
+            # Step 3: Apply channel E_l
+            rho_after_channel = kraus_apply(rho_after_instrument, channel_kraus)
+
+            # Step 4: Apply Φ^(a')_{o'} and sum over outcomes (classical trace)
+            # Sum over all next-outcome Kraus maps (Kraus sum = Tr_{classical})
+            rho_after_next = np.zeros((S, S), dtype=np.complex128)
+            for o_next in kraus_a_next_by_outcome:
+                kraus_next = kraus_a_next_by_outcome[o_next]
+                rho_after_next += kraus_apply(rho_after_channel, kraus_next)
+
+            # Step 5: For each row μ, compute A[μ,ν] = Tr[P_μ · ρ_result]
+            for mu, P_mu in enumerate(basis):
+                val = np.trace(P_mu.conj().T @ rho_after_next)
+                A[mu, nu] = np.real(val)
+
+        return A
+
+    def get_A_all(
+        self,
+        channel_idx: int = 0,
+    ) -> dict[tuple[int, int, int, int], np.ndarray]:
+        """Build all OOM operators for a given channel.
+
+        Args:
+            channel_idx: Which channel E_l to use (default 0).
+
+        Returns:
+            Dict {(o, a, o_next, a_next): A} mapping
+            (current_outcome, current_action, next_outcome, next_action) → operator.
+            For each (o,a,o',a'), A[μ,ν] = Tr[P_μ · Φ_{o'}^{a'}(E_l(Φ_o^a(P_ν))))]
+        """
+        kraus_ch = self._kraus_channels[channel_idx]
+        ops = {}
+
+        for a in range(self.A):
+            for o in range(self.O):
+                # instrument for action a at observed outcome o (current)
+                instrument_a = {
+                    o: self._kraus_instruments.get((a, o), [np.eye(self.S)])
+                }
+                for a_next in range(self.A):
+                    for o_next in range(self.O):
+                        # instrument for next action a_next at specific next outcome o_next
+                        instrument_a_next = {
+                            o_next: self._kraus_instruments.get(
+                                (a_next, o_next), [np.eye(self.S)]
+                            )
+                        }
+
+                        A = self.build_A_operator(
+                            channel_kraus=kraus_ch,
+                            instrument_a=instrument_a,
+                            instrument_a_next=instrument_a_next,
+                            action=a,
+                            outcome=o,
+                            action_next=a_next,
+                        )
+                        ops[(o, a, o_next, a_next)] = A
+
+        return ops
+
+    def predict_trajectory_prob(
+        self,
+        actions: np.ndarray,
+        outcomes: np.ndarray,
+        rho_init: Optional[np.ndarray] = None,
+        channel_idx: int = 0,
+    ) -> float:
+        """Compute trajectory probability P(τ) using the forward algorithm.
+
+        The OOM forward algorithm: for trajectory (o_t, a_t, o_{t+1}, a_{t+1}),
+        the state update is v_{t+1} = A(o_t, a_t, o_{t+1}, a_{t+1}) @ v_t.
+
+        A(o,a,o',a')[μ,ν] = Tr[P_μ · Φ_{o'}^{a'}(E_l(Φ_o^a(P_ν))))]
+        where:
+        - Φ_o^a = instrument for action a at observed outcome o (Kraus sum within o)
+        - E_l = channel
+        - Φ_{o'}^{a'} = instrument for action a' at next outcome o' (Kraus sum within o')
+
+        The step probability p_t = Tr[ρ̃_t] = Σ_μ v_t[μ] = Σ_μ (A @ v_{t-1})[μ].
+
+        Trajectory probability: P(τ) = Π_t p_t
+
+        Args:
+            actions: Action indices, shape (T,).
+            outcomes: Outcome indices, shape (T,).
+            rho_init: Initial state (S,S). Defaults to self._rho1.
+            channel_idx: Which channel to use.
+
+        Returns:
+            Trajectory probability.
+        """
+        T = len(actions)
+        if T == 0:
+            return 1.0
+
+        if rho_init is None:
+            rho_init = self._rho1
+
+        ops = self.get_A_all(channel_idx=channel_idx)
+        total_prob = 1.0
+        rho_t = rho_init.copy()
+
+        for t in range(T):
+            a = int(actions[t])
+            o = int(outcomes[t])
+            a_next = int(actions[t + 1]) if t + 1 < T else a
+            o_next = int(outcomes[t + 1]) if t + 1 < T else o
+
+            key = (o, a, o_next, a_next)
+            if key in ops:
+                v_t = ops[key] @ hs_vectorize(rho_t, self._basis)
+            else:
+                v_t = hs_vectorize(rho_t, self._basis)
+
+            # Probability = Σ_μ v_t[μ] = Tr[ρ̃_t] (unnormalized next state)
+            p_t = np.real(np.sum(v_t))
+            if p_t <= 0:
+                return 0.0
+            total_prob *= p_t
+
+            # Normalize for next step
+            rho_t_unorm = hs_unvectorize(v_t, self._basis)
+            rho_t = rho_t_unorm / p_t
+
+        return float(np.real(total_prob))
+
+    def __repr__(self) -> str:
+        return f"OOMModel(S={self.S}, A={self.A}, O={self.O}, L={self.L})"
