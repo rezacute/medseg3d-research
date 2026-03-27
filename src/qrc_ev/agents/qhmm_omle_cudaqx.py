@@ -84,17 +84,20 @@ def kraus_from_choi(J: np.ndarray, d_in: int, d_out: int) -> list[np.ndarray]:
 
     Returns:
         List of Kraus operators K_i, each shape (d_out, d_in).
+        These satisfy Σ_i K_i† K_i = I_{d_in} / d_in  (TP under choi_from_kraus convention).
     """
     # Eigenvalue decomposition
     eigenvalues, eigenvectors = np.linalg.eigh(J)
 
     # Keep only positive eigenvalues (numerical PSD enforcement)
+    # Rescale so that Σ K†K = I/d_in (TP constraint)
     Ks = []
     for i in range(len(eigenvalues)):
         lam = eigenvalues[i]
         if lam > 1e-9:
             v = eigenvectors[:, i]
-            K = v.reshape(d_out, d_in) * np.sqrt(lam)
+            # Rescale: sqrt(λ/d_in) gives Kraus operators with ΣK†K = I/d_in
+            K = v.reshape(d_out, d_in) * np.sqrt(lam / d_in)
             Ks.append(K)
 
     return Ks if Ks else [np.zeros((d_out, d_in), dtype=np.complex128)]
@@ -142,7 +145,13 @@ def vec_dag(v: np.ndarray) -> np.ndarray:
 
 
 def is_choi_valid(J: np.ndarray, d_in: int, d_out: int, tol: float = 1e-6) -> bool:
-    """Check if J is a valid Choi matrix (PSD, trace-preserving)."""
+    """Check if J is a valid Choi matrix (PSD, trace-preserving).
+
+    Uses the Jamiolkowski convention consistent with choi_from_kraus:
+    J_flat[r*d_in+c, k*d_in+l] = J[(r,c),(k,l)].
+
+    Trace-preserving: Tr_out[J(c,l)) = Σ_r J[(r,c),(r,l)] = δ_cl · I.
+    """
     if J.shape != (d_out * d_out, d_in * d_in):
         return False
     # PSD check
@@ -150,11 +159,12 @@ def is_choi_valid(J: np.ndarray, d_in: int, d_out: int, tol: float = 1e-6) -> bo
     if evals.min() < -tol:
         return False
     # Trace-preserving: Tr_out[J] = I_d_in
-    d_out_sq = d_out * d_out
+    # Tr_out[c,l] = Σ_r J[(r,c),(r,l)] = Σ_r J[r*d_in+c, r*d_in+l]
     tr_out = np.zeros((d_in, d_in), dtype=np.complex128)
     for r in range(d_out):
-        for c in range(d_out):
-            tr_out += J[r * d_out:(r + 1) * d_out, c * d_in:(c + 1) * d_in]
+        for c in range(d_in):
+            for l in range(d_in):
+                tr_out[c, l] += J[r * d_in + c, r * d_in + l]
     if np.linalg.norm(tr_out - np.eye(d_in)) > tol:
         return False
     return True
@@ -398,39 +408,38 @@ class OMLeAgent:
         init_instruments: Optional[dict[tuple[int, int], np.ndarray]],
         init_rho1: Optional[np.ndarray],
     ) -> None:
-        """Initialize or validate QHMM parameters."""
+        """Initialize QHMM parameters with valid CPTP channels/instruments."""
         S, A, O, L = self.S, self.A, self.O, self.L
         S2 = S * S
 
-        # Initial state: |0⟩⟨0| (vectorized in Choi convention)
+        # Initial state: |0⟩⟨0|
         if init_rho1 is None:
             rho1 = np.zeros((S, S), dtype=np.complex128)
             rho1[0, 0] = 1.0
         else:
             rho1 = init_rho1
 
-        # Initialize channel Choi matrices (random rank-1, TP)
+        # Initialize channel Choi matrices: use known-valid TP channels
+        # (identity channel via Kraus operator K=I ⊗ I^½) to ensure validity
         if init_channels is None:
             J_channels = []
             for _ in range(L):
-                # Start with random Kraus operator → Choi
-                K0 = np.random.randn(S, S) + 1j * np.random.randn(S, S)
-                K0 = K0 / np.linalg.norm(K0, "nuc")  # approximately TP
-                # Make exactly TP: adjust so Tr_out[J] = I
-                J = choi_from_kraus([K0])
-                # Project onto TP constraint
-                J_channels.append(self._make_tp_choi(J, S, S))
+                # Identity channel: K = I/d^½ → J has eigenvalues = 1 on SWAP structure
+                # Use Kraus representation: single Kraus K = I (TP)
+                K_I = np.eye(S, dtype=np.complex128)
+                J_I = choi_from_kraus([K_I])
+                J_channels.append(J_I)
         else:
             J_channels = init_channels
 
-        # Initialize instrument branches
+        # Initialize instrument branches: use valid TP channels
         if init_instruments is None:
             J_instruments = {}
+            K_I = np.eye(S, dtype=np.complex128)
+            J_I = choi_from_kraus([K_I])
             for a in range(A):
                 for o in range(O):
-                    K0 = np.random.randn(S, S) + 1j * np.random.randn(S, S)
-                    J = choi_from_kraus([K0])
-                    J_instruments[(a, o)] = self._make_tp_choi(J, S, S)
+                    J_instruments[(a, o)] = J_I
         else:
             J_instruments = init_instruments
 
@@ -444,29 +453,40 @@ class OMLeAgent:
             L=L,
         )
 
-    def _make_tp_choi(self, J: np.ndarray, d_in: int, d_out: int) -> np.ndarray:
-        """Project a Choi matrix onto the trace-preserving subspace.
+    def _project_choi_tp(self, J: np.ndarray, d_in: int, d_out: int) -> np.ndarray:
+        """Project a Choi matrix to satisfy CPTP constraints.
 
-        J_TP = J + (I - Tr_out[J]) ⊗ (I/d_in)  (trace correction)
+        Uses Jamiolkowski indexing: J_flat[r*d_in+c, k*d_in+l] = J[(r,c),(k,l)].
+        Enforces Tr_out[J] = I_d_in where Tr_out[c,l] = Σ_r J[(r,c),(r,l)].
+
+        Steps:
+        1. PSD projection via eigenvalue clipping (preserve spectrum)
+        2. TP correction on PSD-projected matrix
         """
-        S2_in = d_in * d_in
-        S2_out = d_out * d_out
+        # Step 1: PSD projection - clip negative eigenvalues
+        evals, evecs = np.linalg.eigh(J)
+        evals = np.maximum(evals, 1e-9)
+        J_psd = evecs @ np.diag(evals) @ evecs.conj().T
 
-        # Compute Tr_out[J]
+        # Step 2: Compute Tr_out of PSD-projected matrix
         Tr_out = np.zeros((d_in, d_in), dtype=np.complex128)
         for r in range(d_out):
-            Tr_out += J[r * d_out:(r + 1) * d_out, r * d_out:(r + 1) * d_out]
+            for c in range(d_in):
+                for l in range(d_in):
+                    Tr_out[c, l] += J_psd[r * d_in + c, r * d_in + l]
 
-        # Correct toward I/d_in
-        deficit = np.eye(d_in) - Tr_out
-        correction = np.kron(deficit / d_in, np.eye(d_out))
-        J_corr = J + correction
+        # Step 3: TP correction - adjust diagonal blocks to enforce Tr_out = I
+        deficit = np.eye(d_in) - Tr_out  # How much we're missing
+        # Apply correction: add deficit[c,l] to the (c,l) diagonal block of J
+        # Using the Jamiolkowski structure: deficit correction goes to
+        # block[c,l] at position (c*d_in + r, l*d_in + r) summed over r
+        J_proj = J_psd.copy()
+        for r in range(d_out):
+            for c in range(d_in):
+                for l in range(d_in):
+                    J_proj[r * d_in + c, r * d_in + l] += deficit[c, l] / d_in
 
-        # Re-normalize eigenvalues
-        evals, evecs = np.linalg.eigh(J_corr)
-        evals = np.maximum(evals, 1e-9)
-        J_corr = evecs @ np.diag(evals) @ evecs.conj().T
-        return J_corr
+        return J_proj
 
     @property
     def channels(self) -> list[np.ndarray]:
@@ -750,18 +770,27 @@ class OMLeAgent:
 
         solver_opts = {
             "verbose": verbose,
-            "max_iter": max_iter,
+            "max_iters": max(2000, max_iter * 10),  # SCS needs many iterations
+            "eps": 1e-6,  # Relaxed tolerance for SCS
+            "acceleration_lookback": 0,
+            "rho_x": 1e-4,  # Better conditioned rho
         }
         if self._solver == "MOSEK":
-            solver_opts["mosek"] = {"MSK_IPAR_NUM_THREADS": 4}
+            solver_opts["mosek"] = {"MSK_IPAR_NUM_THREADS": 4, "MSK_DPAR_INTPNT_CO_TOL_REL_GAP": 1e-6}
 
         t_start = time.time()
 
         try:
-            problem.solve(solver=self._solver.lower(), **solver_opts)
+            problem.solve(solver=self._solver.lower(), ignore_dpp=True, **solver_opts)
         except Exception:
-            # Fallback to SCS
-            problem.solve(solver="SCS", verbose=verbose, max_iters=max_iter)
+            # Fallback to SCS with more iterations
+            scs_opts = {
+                "verbose": verbose,
+                "max_iters": 5000,
+                "eps": 1e-5,
+                "acceleration_lookback": 0,
+            }
+            problem.solve(solver="scs", ignore_dpp=True, **scs_opts)
 
         solver_time = time.time() - t_start
 
@@ -771,10 +800,7 @@ class OMLeAgent:
             for l in range(L):
                 J_val = J_ch_vars[l].value
                 if J_val is not None:
-                    # Project to PSD
-                    evals, evecs = np.linalg.eigh(J_val)
-                    evals = np.maximum(evals, 1e-9)
-                    J_proj = evecs @ np.diag(evals) @ evecs.conj().T
+                    J_proj = self._project_choi_tp(J_val, S, S)
                     new_J_channels.append(J_proj.astype(np.complex128))
                 else:
                     new_J_channels.append(self._state.J_channels[l])
@@ -784,9 +810,7 @@ class OMLeAgent:
                 for o in range(O):
                     J_val = J_ins_vars[(a, o)].value
                     if J_val is not None:
-                        evals, evecs = np.linalg.eigh(J_val)
-                        evals = np.maximum(evals, 1e-9)
-                        J_proj = evecs @ np.diag(evals) @ evecs.conj().T
+                        J_proj = self._project_choi_tp(J_val, S, S)
                         new_J_instruments[(a, o)] = J_proj.astype(np.complex128)
                     else:
                         new_J_instruments[(a, o)] = self._state.J_instruments[(a, o)]
