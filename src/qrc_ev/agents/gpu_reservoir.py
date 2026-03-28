@@ -106,6 +106,63 @@ class GPUQuantumReservoir:
 
         return (torch.abs(state) ** 2).cpu().numpy()
 
+
+    def reset_state(self):
+        """Reset reservoir to |0...0⟩ initial state."""
+        self._current_state = torch.zeros(self._dim, dtype=self.dtype, device=self.device)
+        self._current_state[0] = 1.0
+
+    def evolve_state(self, x: np.ndarray) -> np.ndarray:
+        """Evolve state by one step with input x. Returns population vector.
+
+        This is stateful: the internal state is updated each call.
+        Use reset_state() to reinitialize.
+
+        Args:
+            x: Input feature vector, shape (n_features,)
+
+        Returns:
+            Population vector (2^nQ,), real values summing to 1.
+        """
+        angles = self._compute_angles(x)
+        nq = self.n_qubits
+
+        if not hasattr(self, '_current_state') or self._current_state is None:
+            self.reset_state()
+
+        state = self._current_state
+
+        # Single-qubit rotations
+        for i in range(nq):
+            U = self._rz(angles[i]) @ self._rx(angles[i])
+            state = self._apply_u1(state, U, i)
+
+        # ZZ coupling (2 Trotter steps)
+        theta = np.pi / 8
+        for _ in range(2):
+            for i in range(nq - 1):
+                state = self._apply_zz(state, theta, i, i + 1)
+
+        self._current_state = state
+        return (torch.abs(state) ** 2).cpu().numpy()
+
+    def process_sequence(self, input_sequence: np.ndarray) -> np.ndarray:
+        """Process a single sequence, resetting state first.
+
+        Args:
+            input_sequence: shape (sequence_length, n_features)
+
+        Returns:
+            output: shape (sequence_length, n_reservoir_features)
+        """
+        self.reset_state()
+        T = input_sequence.shape[0]
+        output = np.zeros((T, self.n_reservoir_features), dtype=np.float64)
+        for t in range(T):
+            pop = self.evolve_state(input_sequence[t])
+            output[t, :] = pop[:self.n_reservoir_features]
+        return output
+
     def process_batch(self, input_batch: np.ndarray) -> np.ndarray:
         """Process a batch of sequences."""
         if input_batch.ndim == 2:
