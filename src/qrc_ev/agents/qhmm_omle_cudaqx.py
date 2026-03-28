@@ -75,7 +75,7 @@ def choi_from_kraus(Ks: list[np.ndarray]) -> np.ndarray:
 def kraus_from_choi(J: np.ndarray, d_in: int, d_out: int) -> list[np.ndarray]:
     """Extract Kraus operators from Choi matrix via eigendecomposition.
 
-    J = Σ_i λ_i |v_i⟩⟩⟨⟨v_i|,  then K_i = reshape(v_i, (d_out, d_in)) * sqrt(λ_i)
+    J = Σ_i λ_i |v_i⟩⟩⟨⟨v_i|,  then K_i = reshape(v_i, (d_out, d_in)) * np.sqrt(λ_i)
 
     Args:
         J: Choi matrix, shape (d_out*d_out, d_in*d_in).
@@ -92,14 +92,14 @@ def kraus_from_choi(J: np.ndarray, d_in: int, d_out: int) -> list[np.ndarray]:
     # Keep only positive eigenvalues (numerical PSD enforcement)
     # From J = Σ_i λ_i |v_i⟩⟩⟨⟨v_i| ( Jamiołkowski convention),
     # the TP Kraus operators are:
-    # K_i = sqrt(λ_i) · vec_inv(|v_i⟩⟩)  (reshaped to d_out×d_in)
+    # K_i = np.sqrt(λ_i) · vec_inv(|v_i⟩⟩)  (reshaped to d_out×d_in)
     # This gives Σ_i K_i† K_i = I (TP).
     Ks = []
     for i in range(len(eigenvalues)):
         lam = eigenvalues[i]
         if lam > 1e-9:
             v = eigenvectors[:, i]
-            # K = sqrt(λ) · vec_inv(v)  (proper TP normalization)
+            # K = np.sqrt(λ) · vec_inv(v)  (proper TP normalization)
             K = v.reshape(d_out, d_in) * np.sqrt(lam)
             Ks.append(K)
 
@@ -1761,28 +1761,21 @@ def sic_unitary(S: int) -> np.ndarray:
     Note: the user's phase formula e^{2πi(k-1)/3} gives k=2,3 identical
     (e^{4πi/3} = e^{-2πi/3}). The correct phase is e^{2πik/3}.
 
-    The 8×8 Naimark unitary U acts on |ψ⟩_q0 |0,0⟩_{q1q2} (system + 2 ancilla qubits)
-    as:
+    The 8×8 Naimark unitary U acts on |ψ⟩_q0 |00⟩_{q1q2} as:
         U |ψ⟩|00⟩ = Σ_{k=0}^{3} √(M_k) |ψ⟩ |k⟩_anc
     where |k⟩_anc = |b1⟩_{q2} |b0⟩_{q1} with k = 2·b1 + b0.
 
-    The full 8×8 U is block-diagonal in the ancilla index: each k gives a 2×2
-    block √(M_k) acting on the system. The 8 rows are indexed by (i, k) where
-    i ∈ {0,1} is the system output state and k ∈ {0,1,2,3} is the ancilla state.
-    The columns are indexed by (j, b) where j ∈ {0,1} is the system input and
-    b ∈ {0,1,2,3} is the ancilla input.
-
-    Matrix element (row=(i,k), col=(j,b)):
-        U[(i,k), (j,b)] = δ_{kb} · ⟨i|√(M_k)|j⟩
-
-    Since √(M_k) = (1/√2)|v_k⟩⟨v_k|, we have:
-        ⟨i|√(M_k)|j⟩ = (1/√2) ⟨i|v_k⟩ ⟨v_k|j⟩ = (1/√2) v_k[i]^* · v_k[j]
+    Construction:
+    1. Build isometry V: C^2 → C^8 with orthonormal columns
+       V[(i,k), j] = (1/√2)⟨v_k|i⟩⟨v_k|j⟩ = (1/√2)v_k[i]^*·v_k[j]
+       Verified: V†V = I_2 (orthonormal columns) ✓
+    2. Complete to unitary U = [V | √(I_8 - VV†)] via orthogonal complement
 
     Args:
         S: Hilbert space dimension (unused, SIC-POVM is always on a qubit S=2).
 
     Returns:
-        U: (8, 8) complex unitary matrix for 2-qubit Naimark embedding.
+        U: (8, 8) unitary complex matrix for 2-qubit Naimark embedding.
     """
     # Canonical SIC vectors (correct phases: e^{2πik/3})
     phases = [np.exp(2j * np.pi * k / 3) for k in range(1, 4)]
@@ -1790,41 +1783,58 @@ def sic_unitary(S: int) -> np.ndarray:
         np.array([1.0 + 0j, 0.0 + 0j]),                                           # |v_0⟩ = |0⟩
         np.array([1.0 / np.sqrt(3), np.sqrt(2.0 / 3) * phases[0]]),               # |v_1⟩
         np.array([1.0 / np.sqrt(3), np.sqrt(2.0 / 3) * phases[1]]),               # |v_2⟩
-        np.array([1.0 / np.sqrt(3), np.sqrt(2.0 / 3) * phases[2]]),               # |v_3⟩
+        np.array([1.0 / np.sqrt(3), np.sqrt(2.0 / 3) * phases[2]]),                   # |v_3⟩
     ]
 
-    # Verify ⟨v_j|v_k⟩ = δ_jk + (1/√3)(1-δ_jk)  (canonical SIC Gram matrix)
+    # Verify ⟨v_j|v_k⟩ = δ_jk + (1/√3)(1-δ_jk) [canonical SIC Gram]
     for j in range(4):
         for k in range(4):
             ip = np.vdot(vk_list[j], vk_list[k])
             expected = 1.0 if j == k else 1.0 / np.sqrt(3)
             assert np.isclose(np.abs(ip), expected, atol=1e-10),                 f"sic_unitary: ⟨v_{j}|v_{k}⟩ = {ip}, expected {expected}"
 
-    # Build 8×8 Naimark unitary.
-    # Flat indexing: basis |q0⟩|q1⟩|q2⟩ → index q0 + 2*q1 + 4*q2 (q0=system LSB)
-    # Row (i,k): output system state i, output ancilla state k
-    # Col (j,b): input system state j, input ancilla state b
-    U = np.zeros((8, 8), dtype=np.complex128)
+    # Step 1: Build isometry V (8×2) with orthonormal columns
+    # V[(i,k), j] = ⟨i|√(M_k)|j⟩ = (1/√2)⟨v_k|i⟩⟨v_k|j⟩ = (1/√2)v_k[i].conj()*v_k[j]
+    V = np.zeros((8, 2), dtype=np.complex128)
     for k in range(4):
         vk = vk_list[k]
-        for j in range(2):
-            for i in range(2):
-                # ⟨i|√(M_k)|j⟩ = (1/√2) ⟨i|v_k⟩⟨v_k|j⟩ = (1/√2) v_k[i]^* · v_k[j]
-                val = (1.0 / np.sqrt(2.0)) * vk[i].conj() * vk[j]
-                # row = i + 2*anc_out + 4*anc_bit1 = i + 2*b0 + 4*b1 where k = 2*b1 + b0
-                b1 = k // 2
-                b0 = k % 2
+        b1 = k // 2
+        b0 = k % 2
+        for i in range(2):
+            for j in range(2):
                 row = i + 2 * b0 + 4 * b1
-                # col = j + 2*anc_in_bit0 + 4*anc_in_bit1 = j + 2*0 + 4*0 = j
-                col = j
-                U[row, col] = val
-    # Note: The 8×8 Naimark "unitary" for these POVM elements does NOT satisfy
-    # U @ U† = I because Σ_k M_k = (2/3)I ≠ I (the POVM is unnormalized).
-    # The key result is the analytic probability p_k = Tr(M_k · rho)
-    # = (1/2)|⟨v_k|ψ⟩|², correctly computed in _sic_povm_probabilities.
-    return U
-    # correctly implemented in _sic_povm_probabilities. The SIC-POVM simulation
-    # uses analytic sampling (CUDA-Q path requires correct unitary embedding).
+                V[row, j] = (1.0 / np.sqrt(2.0)) * vk[i].conj() * vk[j]
+
+    # Verify orthonormal columns: V†V = I_2
+    assert np.allclose(V.conj().T @ V, np.eye(2), atol=1e-10),         "sic_unitary: V columns not orthonormal!"
+
+    # Step 2: Complete to unitary U = [V | W]
+    # W: orthonormal basis for orthogonal complement of range(V)
+    # Use eigendecomposition of VV† (projector onto range(V))
+    VVd = V @ V.conj().T
+    w, u = np.linalg.eigh(VVd)
+
+    # Sort eigenvalues descending; eigenvectors with ~0 eigenvalue span complement
+    idx = np.argsort(w.real)[::-1]
+    w = w[idx]
+    u = u[:, idx]
+
+    # Take eigenvectors with smallest eigenvalues as orthogonal complement
+    tol = 1e-10
+    ortho_idx = [i for i in range(8) if w[i] <= tol]
+    W = u[:, ortho_idx]  # 8×6
+
+    # Verify W has orthonormal columns and is orthogonal to V
+    assert np.allclose(W.conj().T @ W, np.eye(6), atol=1e-10), "sic_unitary: W columns not orthonormal!"
+    assert np.allclose(W.conj().T @ V, np.zeros((6, 2)), atol=1e-10), "sic_unitary: W not orthogonal to V!"
+
+    # Build U = [V | W] (8×8)
+    U = np.hstack([V, W])
+
+    # Verify U is unitary
+    assert np.allclose(U @ U.conj().T, np.eye(8), atol=1e-8), "sic_unitary: U is not unitary!"
+    assert np.allclose(U.conj().T @ U, np.eye(8), atol=1e-8), "sic_unitary: U†U ≠ I!"
+
     return U
 
 
@@ -2029,7 +2039,17 @@ def validate_sic_povm() -> bool:
     else:
         print("   ✓ Σ_k M_k = I")
 
-    # Test 5: Probabilities sum to 1 for random states
+    # Test 5: Verify 8×8 Naimark unitary is unitary (U @ U† = I_8)
+    print("\n5. Naimark unitary is unitary (8×8):")
+    U = sic_unitary(S=2)
+    ok_u = np.allclose(U @ U.conj().T, np.eye(8), atol=1e-8) and np.allclose(U.conj().T @ U, np.eye(8), atol=1e-8)
+    if ok_u:
+        print("   ✓ U @ U† = I_8 and U† @ U = I_8")
+    else:
+        print("   FAILED: U is not unitary!  ✗")
+        all_ok = False
+
+    # Test 6: Probabilities sum to 1 for random states
     print("\n5. Probability sum = 1 for random states:")
     rng = np.random.default_rng(42)
     for trial in range(5):
