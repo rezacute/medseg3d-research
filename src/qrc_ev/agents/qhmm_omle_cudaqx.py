@@ -1635,5 +1635,109 @@ class OOMModel:
 
         return float(np.real(total_prob))
 
+    def compute_forward_backward(
+        self,
+        actions: np.ndarray,
+        outcomes: np.ndarray,
+        rho_init: Optional[np.ndarray] = None,
+        channel_idx: int = 0,
+    ) -> dict:
+        """Forward-backward algorithm for smoothing in OOM-based QHMM.
+
+        Computes:
+        - Forward messages: α_t[μ] = P(ρ_t = P_μ | τ_{1:t}, a_{t-1}) ∝ v_t[μ]
+        - Backward messages: β_t[μ] = P(τ_{t+1:T} | ρ_t = P_μ, a_t, o_t)
+        - Smoothing posteriors: P(ρ_t = P_μ | τ_{1:T}) = α_t[μ] · β_t[μ] / Z_t
+
+        where Z_t = Σ_μ v_t[μ] = P(o_t | τ_{1:t-1}, a_{t-1}) is the marginal likelihood.
+
+        Args:
+            actions: Action indices, shape (T,).
+            outcomes: Outcome indices, shape (T,).
+            rho_init: Initial state (S,S). Defaults to self._rho1.
+            channel_idx: Which channel to use.
+
+        Returns:
+            Dict with keys:
+            - 'alpha': Forward messages, shape (T, S²) — normalized
+            - 'beta': Backward messages, shape (T, S²) — unnormalized
+            - 'Z': Marginal likelihoods Z_t = P(o_t | τ_{1:t-1}, a_{t-1}), shape (T,)
+            - 'smoothing_posteriors': P(ρ_t | τ_{1:T}), shape (T, S²)
+            - 'loglikelihood': Σ_t log(Z_t)
+        """
+        T = len(actions)
+        if T == 0:
+            return {
+                'alpha': np.zeros((0, self.S2)),
+                'beta': np.zeros((0, self.S2)),
+                'Z': np.zeros(0),
+                'smoothing_posteriors': np.zeros((0, self.S2)),
+                'loglikelihood': 0.0,
+            }
+
+        if rho_init is None:
+            rho_init = self._rho1
+
+        ops = self.get_A_all(channel_idx=channel_idx)
+
+        # Forward pass: compute v_t (unnormalized state) and Z_t
+        v_t = hs_vectorize(rho_init, self._basis)  # v_0 unnormalized
+        alpha = np.zeros((T, self.S2), dtype=np.float64)
+        Z = np.zeros(T, dtype=np.float64)
+
+        for t in range(T):
+            a = int(actions[t])
+            o = int(outcomes[t])
+            a_next = int(actions[t + 1]) if t + 1 < T else a
+            o_next = int(outcomes[t + 1]) if t + 1 < T else o
+
+            key = (o, a, o_next, a_next)
+            if key in ops:
+                v_t = ops[key] @ v_t
+
+            Z_t = np.real(np.sum(v_t))
+            Z[t] = Z_t
+            alpha[t] = v_t / Z_t if Z_t > 0 else np.zeros(self.S2)
+            v_t = v_t / Z_t if Z_t > 0 else np.zeros(self.S2)
+
+        loglikelihood = float(np.sum(np.log(Z[np.where(Z > 0)])))
+
+        # Backward pass: compute β_t
+        # β_t[μ] = P(τ_{t+1:T} | ρ_t = P_μ, a_t, o_t) [unnormalized]
+        # Recurrence: β_t = A(o_t,a_t,o_{t+1},a_{t+1})^T @ β_{t+1} / Z_t
+        # where Z_t = P(o_{t+1} | τ_{1:t}, a_{t+1}) is from the forward pass
+        beta = np.zeros((T, self.S2), dtype=np.float64)
+        beta[T - 1] = np.ones(self.S2, dtype=np.float64)  # β_T = 1
+
+        for t in range(T - 2, -1, -1):
+            a_t = int(actions[t])
+            o_t = int(outcomes[t])
+            o_next = int(outcomes[t + 1])
+            a_next = int(actions[t + 1])  # use trajectory's next action (not summed)
+            Z_t = Z[t]
+
+            key = (o_t, a_t, o_next, a_next)
+            if key in ops:
+                beta[t] = ops[key].T @ beta[t + 1]
+                beta[t] /= Z_t if Z_t > 0 else 1.0
+            else:
+                beta[t] = np.zeros(self.S2)
+
+        # Smoothing posteriors: P(ρ_t | τ_{1:T}) = α_t ⊙ β_t / Z̄_t
+        # where Z̄_t = Σ_μ α_t[μ] · β_t[μ] = P(τ_{t+1:T} | τ_{1:t})
+        smoothing_posteriors = np.zeros((T, self.S2), dtype=np.float64)
+        for t in range(T):
+            joint = alpha[t] * beta[t]
+            Z_bar_t = np.sum(joint)
+            smoothing_posteriors[t] = joint / Z_bar_t if Z_bar_t > 0 else np.zeros(self.S2)
+
+        return {
+            'alpha': alpha,
+            'beta': beta,
+            'Z': Z,
+            'smoothing_posteriors': smoothing_posteriors,
+            'loglikelihood': loglikelihood,
+        }
+
     def __repr__(self) -> str:
         return f"OOMModel(S={self.S}, A={self.A}, O={self.O}, L={self.L})"
