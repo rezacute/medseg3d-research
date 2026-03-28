@@ -1,0 +1,140 @@
+{
+  "metadata": {
+    "date": "2026-03-28",
+    "n_samples": 3000,
+    "train_ratio": 0.7,
+    "gpu_available": true
+  },
+  "per_dataset": {
+    "sinusoid": {
+      "description": "Simple sinusoid (period=20)",
+      "models": {
+        "Ridge": {
+          "val_r2": 0.99,
+          "test_r2": 0.99,
+          "test_rmse": 0.07
+        },
+        "ESN_200": {
+          "val_r2": 0.97,
+          "test_r2": 0.97,
+          "test_rmse": 0.13
+        },
+        "QRC_6q": {
+          "val_r2": 0.95,
+          "test_r2": 0.95,
+          "test_rmse": 0.17
+        },
+        "QRC_10q": {
+          "val_r2": 0.12,
+          "test_r2": 0.12,
+          "test_rmse": 0.88
+        }
+      }
+    },
+    "mackey_glass": {
+      "description": "Mackey-Glass chaotic (tau=17)",
+      "models": {
+        "Ridge": {
+          "val_r2": 0.51,
+          "test_r2": 0.52,
+          "test_rmse": 0.08
+        },
+        "ESN_200": {
+          "val_r2": 0.99,
+          "test_r2": 0.99,
+          "test_rmse": 0.02
+        },
+        "QRC_6q": {
+          "val_r2": 0.99,
+          "test_r2": 0.99,
+          "test_rmse": 0.02
+        },
+        "QRC_10q": {
+          "val_r2": 0.99,
+          "test_r2": 0.99,
+          "test_rmse": 0.02
+        }
+      }
+    },
+    "narma10": {
+      "description": "NARMA10 (hard nonlinear memory task)",
+      "models": {
+        "Ridge": {
+          "val_r2": 0.42,
+          "test_r2": 0.4,
+          "test_rmse": 0.13
+        },
+        "ESN_200": {
+          "val_r2": 0.52,
+          "test_r2": 0.52,
+          "test_rmse": 0.11
+        },
+        "ESN_500": {
+          "val_r2": 0.54,
+          "test_r2": 0.52,
+          "test_rmse": 0.11
+        },
+        "QRC_6q": {
+          "val_r2": 0.53,
+          "test_r2": 0.54,
+          "test_rmse": 0.11
+        },
+        "QRC_10q": {
+          "val_r2": 0.56,
+          "test_r2": 0.56,
+          "test_rmse": 0.1
+        }
+      }
+    },
+    "weekly_pattern": {
+      "description": "Weekly + daily + hourly (EV-like)",
+      "models": {
+        "Ridge": {
+          "val_r2": 0.83,
+          "test_r2": 0.83,
+          "test_rmse": 0.62
+        },
+        "ESN_200": {
+          "val_r2": 0.79,
+          "test_r2": 0.79,
+          "test_rmse": 0.66
+        },
+        "QRC_6q": {
+          "val_r2": 0.81,
+          "test_r2": 0.81,
+          "test_rmse": 0.64
+        },
+        "QRC_10q": {
+          "val_r2": 0.81,
+          "test_r2": 0.81,
+          "test_rmse": 0.64
+        }
+      }
+    },
+    "ev": {
+      "description": "Palo Alto EV charging data",
+      "models": {
+        "Ridge": {
+          "val_r2": 0.91,
+          "test_r2": 0.91,
+          "test_rmse": 45.2
+        },
+        "ESN_200": {
+          "val_r2": 0.53,
+          "test_r2": 0.53,
+          "test_rmse": 97.1
+        },
+        "QRC_6q": {
+          "val_r2": 0.53,
+          "test_r2": 0.53,
+          "test_rmse": 97.1
+        },
+        "QRC_10q": {
+          "val_r2": 0.53,
+          "test_r2": 0.53,
+          "test_rmse": 97.1
+        }
+      }
+    }
+  }
+}
