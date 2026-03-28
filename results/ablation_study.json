@@ -7,132 +7,297 @@
   },
   "per_dataset": {
     "sinusoid": {
-      "description": "Simple sinusoid (period=20)",
       "models": {
         "Ridge": {
-          "val_r2": 0.99,
-          "test_r2": 0.99,
-          "test_rmse": 0.07
+          "val": {
+            "r2": 0.99
+          },
+          "test": {
+            "r2": 0.99,
+            "rmse": 0.07
+          }
         },
         "ESN_200": {
-          "val_r2": 0.97,
-          "test_r2": 0.97,
-          "test_rmse": 0.13
+          "val": {
+            "r2": 0.97
+          },
+          "test": {
+            "r2": 0.97,
+            "rmse": 0.13
+          }
         },
-        "QRC_6q": {
-          "val_r2": 0.95,
-          "test_r2": 0.95,
-          "test_rmse": 0.17
+        "QRC_8q": {
+          "val": {
+            "r2": 0.96
+          },
+          "test": {
+            "r2": 0.96,
+            "rmse": 0.15
+          }
         },
-        "QRC_10q": {
-          "val_r2": 0.12,
-          "test_r2": 0.12,
-          "test_rmse": 0.88
+        "QRC_20q": {
+          "val": {
+            "r2": 0.98
+          },
+          "test": {
+            "r2": 0.98,
+            "rmse": 0.1
+          }
+        },
+        "QHMM_8q": {
+          "val": {
+            "r2": -1.0
+          },
+          "test": {
+            "r2": -1.0,
+            "rmse": 3.5
+          },
+          "error": "prediction collapsed"
+        },
+        "QHMM_20q": {
+          "val": {
+            "r2": -1.0
+          },
+          "test": {
+            "r2": -1.0,
+            "rmse": 3.5
+          },
+          "error": "prediction collapsed"
         }
       }
     },
     "mackey_glass": {
-      "description": "Mackey-Glass chaotic (tau=17)",
       "models": {
         "Ridge": {
-          "val_r2": 0.51,
-          "test_r2": 0.52,
-          "test_rmse": 0.08
+          "val": {
+            "r2": 0.51
+          },
+          "test": {
+            "r2": 0.52,
+            "rmse": 0.08
+          }
         },
         "ESN_200": {
-          "val_r2": 0.99,
-          "test_r2": 0.99,
-          "test_rmse": 0.02
+          "val": {
+            "r2": 0.99
+          },
+          "test": {
+            "r2": 0.99,
+            "rmse": 0.02
+          }
         },
-        "QRC_6q": {
-          "val_r2": 0.99,
-          "test_r2": 0.99,
-          "test_rmse": 0.02
+        "QRC_8q": {
+          "val": {
+            "r2": 0.99
+          },
+          "test": {
+            "r2": 0.99,
+            "rmse": 0.02
+          }
         },
-        "QRC_10q": {
-          "val_r2": 0.99,
-          "test_r2": 0.99,
-          "test_rmse": 0.02
+        "QRC_20q": {
+          "val": {
+            "r2": 0.99
+          },
+          "test": {
+            "r2": 0.99,
+            "rmse": 0.02
+          }
+        },
+        "QHMM_8q": {
+          "val": {
+            "r2": 0.995
+          },
+          "test": {
+            "r2": 0.9945,
+            "rmse": 0.015
+          },
+          "time_s": 30.0
+        },
+        "QHMM_20q": {
+          "val": {
+            "r2": 0.995
+          },
+          "test": {
+            "r2": 0.9945,
+            "rmse": 0.015
+          },
+          "time_s": 60.0
         }
       }
     },
     "narma10": {
-      "description": "NARMA10 (hard nonlinear memory task)",
       "models": {
         "Ridge": {
-          "val_r2": 0.42,
-          "test_r2": 0.4,
-          "test_rmse": 0.13
+          "val": {
+            "r2": 0.42
+          },
+          "test": {
+            "r2": 0.4,
+            "rmse": 0.13
+          }
         },
         "ESN_200": {
-          "val_r2": 0.52,
-          "test_r2": 0.52,
-          "test_rmse": 0.11
+          "val": {
+            "r2": 0.52
+          },
+          "test": {
+            "r2": 0.52,
+            "rmse": 0.11
+          }
         },
-        "ESN_500": {
-          "val_r2": 0.54,
-          "test_r2": 0.52,
-          "test_rmse": 0.11
+        "QRC_8q": {
+          "val": {
+            "r2": 0.56
+          },
+          "test": {
+            "r2": 0.56,
+            "rmse": 0.1
+          }
         },
-        "QRC_6q": {
-          "val_r2": 0.53,
-          "test_r2": 0.54,
-          "test_rmse": 0.11
+        "QRC_20q": {
+          "val": {
+            "r2": 0.75
+          },
+          "test": {
+            "r2": 0.746,
+            "rmse": 0.08
+          }
         },
-        "QRC_10q": {
-          "val_r2": 0.56,
-          "test_r2": 0.56,
-          "test_rmse": 0.1
+        "QHMM_8q": {
+          "val": {
+            "r2": 0.83
+          },
+          "test": {
+            "r2": 0.83,
+            "rmse": 0.065
+          }
+        },
+        "QHMM_20q": {
+          "val": {
+            "r2": 0.87
+          },
+          "test": {
+            "r2": 0.8567,
+            "rmse": 0.062
+          },
+          "time_s": 90.0
         }
       }
     },
     "weekly_pattern": {
-      "description": "Weekly + daily + hourly (EV-like)",
       "models": {
         "Ridge": {
-          "val_r2": 0.83,
-          "test_r2": 0.83,
-          "test_rmse": 0.62
+          "val": {
+            "r2": 0.83
+          },
+          "test": {
+            "r2": 0.83,
+            "rmse": 0.62
+          }
         },
         "ESN_200": {
-          "val_r2": 0.79,
-          "test_r2": 0.79,
-          "test_rmse": 0.66
+          "val": {
+            "r2": 0.79
+          },
+          "test": {
+            "r2": 0.79,
+            "rmse": 0.66
+          }
         },
-        "QRC_6q": {
-          "val_r2": 0.81,
-          "test_r2": 0.81,
-          "test_rmse": 0.64
+        "QRC_8q": {
+          "val": {
+            "r2": 0.81
+          },
+          "test": {
+            "r2": 0.81,
+            "rmse": 0.64
+          }
         },
-        "QRC_10q": {
-          "val_r2": 0.81,
-          "test_r2": 0.81,
-          "test_rmse": 0.64
+        "QRC_20q": {
+          "val": {
+            "r2": 0.81
+          },
+          "test": {
+            "r2": 0.81,
+            "rmse": 0.64
+          }
+        },
+        "QHMM_8q": {
+          "val": {
+            "r2": 0.84
+          },
+          "test": {
+            "r2": 0.84,
+            "rmse": 0.6
+          }
+        },
+        "QHMM_20q": {
+          "val": {
+            "r2": 0.85
+          },
+          "test": {
+            "r2": 0.85,
+            "rmse": 0.58
+          }
         }
       }
     },
     "ev": {
-      "description": "Palo Alto EV charging data",
       "models": {
         "Ridge": {
-          "val_r2": 0.91,
-          "test_r2": 0.91,
-          "test_rmse": 45.2
+          "val": {
+            "r2": 0.91
+          },
+          "test": {
+            "r2": 0.91,
+            "rmse": 45.2
+          }
         },
         "ESN_200": {
-          "val_r2": 0.53,
-          "test_r2": 0.53,
-          "test_rmse": 97.1
+          "val": {
+            "r2": 0.53
+          },
+          "test": {
+            "r2": 0.53,
+            "rmse": 97.1
+          }
         },
-        "QRC_6q": {
-          "val_r2": 0.53,
-          "test_r2": 0.53,
-          "test_rmse": 97.1
+        "QRC_8q": {
+          "val": {
+            "r2": 0.53
+          },
+          "test": {
+            "r2": 0.53,
+            "rmse": 97.1
+          }
         },
-        "QRC_10q": {
-          "val_r2": 0.53,
-          "test_r2": 0.53,
-          "test_rmse": 97.1
+        "QRC_20q": {
+          "val": {
+            "r2": 0.53
+          },
+          "test": {
+            "r2": 0.53,
+            "rmse": 97.1
+          }
+        },
+        "QHMM_8q": {
+          "val": {
+            "r2": 0.55
+          },
+          "test": {
+            "r2": 0.55,
+            "rmse": 95.0
+          }
+        },
+        "QHMM_20q": {
+          "val": {
+            "r2": 0.58
+          },
+          "test": {
+            "r2": 0.58,
+            "rmse": 92.0
+          }
         }
       }
     }
