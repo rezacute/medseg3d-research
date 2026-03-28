@@ -1042,6 +1042,264 @@ def compute_kappa_uc(
         return float(spectral)
 
 
+class PolicyTree:
+    """Greedy policy represented as a decision tree.
+
+    Each node maps a trajectory prefix (actions, outcomes) to either:
+    - an action (leaf/terminal node at depth L), or
+    - a dict {action: subtree} for internal nodes.
+
+    The tree is built by backward induction and pruned to depth L.
+
+    Example for L=2, A=2:
+        ∅ → {0: {((0,0),): 0, ((0,1),): 1}, 1: {((1,0),): 0, ((1,1),): 1}}
+        Meaning: at ∅, choose a=0 or a=1; after observing (a,o),
+        the next action is given by the subtree.
+    """
+
+    def __init__(self):
+        # root: dict {action: subtree or action}
+        self._root = {}
+
+    def set_action(self, trajectory: tuple, action: int) -> None:
+        """Set the action at the leaf reached by trajectory tuple."""
+        node = self._root
+        for key in trajectory[:-1]:
+            if key not in node:
+                node[key] = {}
+            node = node[key]
+        node[trajectory[-1]] = action
+
+    def get_action(self, trajectory: tuple) -> Optional[int]:
+        """Look up the action for a given trajectory tuple (a_0,o_0, a_1,o_1, ...).
+        Returns None if no policy defined at this trajectory.
+        """
+        node = self._root
+        for key in trajectory:
+            if not isinstance(node, dict) or key not in node:
+                return None
+            node = node[key]
+        return node if isinstance(node, int) else None
+
+    def __repr__(self) -> str:
+        return f"PolicyTree({self._root})"
+
+    def size(self) -> int:
+        """Number of leaves (defined trajectory-action pairs)."""
+        def _count(node):
+            if isinstance(node, int):
+                return 1
+            return sum(_count(v) for v in node.values())
+        return _count(self._root)
+
+
+def optimistic_plan(
+    candidate_models: list["QHMMEnvironment"],
+    L: int,
+    A: int,
+    O: int,
+    reward_fn: callable,
+    R: float = 1.0,
+    oom_model: Optional["OOMModel"] = None,
+    verbose: bool = False,
+) -> tuple["QHMMEnvironment", PolicyTree, float]:
+    """Optimistic planning over confidence set via backward induction.
+
+    For each candidate model ω' in candidate_models, runs horizon-L backward
+    induction to compute the greedy policy π_ω' and its value V_1^π(∅).
+    Returns the (model, policy, value) triple with the highest value.
+
+    Backward induction (per model ω'):
+        Q_L(τ_{L-1}, a) = Σ_o P^ω'(o|τ_{L-1}, a) · r_L(a, o)
+        V_L(τ_{L-1}) = max_a Q_L(τ_{L-1}, a)
+        For l = L-1 down to 1:
+            Q_l(τ_{l-1}, a) = Σ_o P^ω'(o|τ_{l-1}, a) · [r_l(a,o) + V_{l+1}(τ_l)]
+            V_l(τ_{l-1}) = max_a Q_l(τ_{l-1}, a)
+        Greedy policy: π(a_l | τ_{l-1}) = argmax_a Q_l(τ_{l-1}, a)
+
+    Args:
+        candidate_models: List of QHMMEnvironment, each with `.model` (OOMModel).
+        L: Planning horizon.
+        A: Number of actions.
+        O: Number of outcomes.
+        reward_fn: Callable reward_fn(l, a, o) → float, step l in [1..L].
+        R: Maximum reward per step (used for bound checking).
+        oom_model: OOMModel to use for predict_trajectory_prob.
+            If None, uses candidate_models[0].model.
+        verbose: If True, prints progress.
+
+    Returns:
+        (best_env, best_policy, best_value):
+            best_env: QHMMEnvironment with highest V_1(∅).
+            best_policy: PolicyTree encoding π*.
+            best_value: V_1^π*(∅) — scalar expected cumulative reward.
+    """
+    if not candidate_models:
+        raise ValueError("candidate_models cannot be empty")
+
+    best_env = None
+    best_policy = None
+    best_value = -np.inf
+
+    for env in candidate_models:
+        model = env.model if hasattr(env, 'model') else env
+        omega_policy, V1 = _backward_induction(model, L, A, O, reward_fn, oom_model)
+
+        if verbose:
+            print(f"  model={id(env)}: V_1(∅)={V1:.4f}")
+
+        if V1 > best_value:
+            best_value = V1
+            best_env = env
+            best_policy = omega_policy
+
+    return best_env, best_policy, best_value
+
+
+def _backward_induction(
+    model: "OOMModel",
+    L: int,
+    A: int,
+    O: int,
+    reward_fn: callable,
+    oom_model: Optional["OOMModel"] = None,
+) -> tuple[PolicyTree, float]:
+    """Run backward induction for a single model.
+
+    Args:
+        model: QHMMEnvironment or OOMModel.
+        oom_model: OOMModel (extracted from env.model if not provided).
+
+    Returns:
+        (policy_tree, V1): greedy policy tree and value at empty history.
+    """
+    if oom_model is None:
+        oom_model = getattr(model, 'model', model)
+
+    S = oom_model.S
+    basis = oom_model._basis
+    rho_init = oom_model._rho1
+
+    # V_values: dict mapping trajectory tuple (a_0,o_0,...,a_{l-1},o_{l-1})
+    #           → V_{l+1}(τ_l) = value of being at step l after observing τ_l
+    V_values: dict[tuple, float] = {}
+
+    # Policy tree: maps trajectory → action at that step
+    policy_tree = PolicyTree()
+
+    # Process leaves at depth L first: for each τ_{L-1},a compute Q_L
+    # V_L(τ_{L-1}) = max_a Q_L(τ_{L-1}, a)
+    # Build all depth-L trajectory prefixes τ_{L-1}
+    def extend_trajectories(trajectories: list[tuple], depth: int) -> list[tuple]:
+        """Generate all trajectory tuples of length depth."""
+        if depth == 0:
+            return [()]
+        result = []
+        for tau in trajectories:
+            for a in range(A):
+                for o in range(O):
+                    result.append(tau + (a, o))
+        return result
+
+    all_tau_Lm1 = extend_trajectories([()], L - 1)  # all (a_0,o_0,...,a_{L-2},o_{L-2})
+
+    # Q_L(τ_{L-1}, a) = Σ_o P(o|τ_{L-1}, a) · r_L(a, o)
+    for tau in all_tau_Lm1:
+        actions_so_far = tau[0::2]  # (a_0, a_1, ..., a_{L-2})
+        # Last action in tau is a_{L-2}. For Q_L we try all possible a_{L-1}.
+        for a in range(A):
+            q_val = 0.0
+            for o in range(O):
+                # P(o|τ_{L-1}, a)
+                a_seq = list(actions_so_far) + [a]
+                o_seq = list(tau[1::2]) + [o]  # fill in outcome o at step L-1
+                actions_arr = np.array(a_seq, dtype=int)
+                outcomes_arr = np.array(o_seq, dtype=int)
+                try:
+                    prob = oom_model.predict_trajectory_prob(
+                        actions_arr, outcomes_arr, rho_init=rho_init
+                    )
+                except Exception:
+                    prob = 0.0
+                if prob <= 0:
+                    continue
+                r = reward_fn(L, a, o)
+                q_val += prob * r
+
+            # Store Q_L value
+            key = (tau, a)  # (τ_{L-1}, a)
+            V_values[key] = q_val
+
+        # V_L(τ_{L-1}) = max_a Q_L
+        q_vals = [V_values[(tau, a)] for a in range(A)]
+        V_values[tau] = max(q_vals)
+
+    # Backward induction for l = L-1 down to 1
+    for l in range(L - 1, 0, -1):
+        # All trajectories of length l-1: τ_{l-1}
+        all_tau_lm1 = extend_trajectories([()], l - 1) if l > 1 else [()]
+
+        for tau in all_tau_lm1:
+            actions_so_far = tau[0::2]
+            for a in range(A):
+                q_val = 0.0
+                for o in range(O):
+                    a_seq = list(actions_so_far) + [a]
+                    o_seq = list(tau[1::2]) + [o]
+                    actions_arr = np.array(a_seq, dtype=int)
+                    outcomes_arr = np.array(o_seq, dtype=int)
+                    try:
+                        prob = oom_model.predict_trajectory_prob(
+                            actions_arr, outcomes_arr, rho_init=rho_init
+                        )
+                    except Exception:
+                        prob = 0.0
+                    if prob <= 0:
+                        continue
+                    r = reward_fn(l, a, o)
+                    # V_{l+1}(τ_l) where τ_l = tau + (a, o)
+                    tau_l = tau + (a, o)
+                    v_next = V_values.get(tau_l, 0.0)
+                    q_val += prob * (r + v_next)
+
+                V_values[(tau, a)] = q_val
+
+            # Greedy action at step l: argmax_a Q_l
+            q_vals = [V_values[(tau, a)] for a in range(A)]
+            best_a = int(np.argmax(q_vals))
+            # Store in policy tree at depth l-1: trajectory tau → best_a
+            policy_tree.set_action(tau, best_a)
+            V_values[tau] = max(q_vals)
+
+    # Finally: depth 0, empty trajectory ∅
+    for a in range(A):
+        q_val = 0.0
+        for o in range(O):
+            actions_arr = np.array([a], dtype=int)
+            outcomes_arr = np.array([o], dtype=int)
+            try:
+                prob = oom_model.predict_trajectory_prob(
+                    actions_arr, outcomes_arr, rho_init=rho_init
+                )
+            except Exception:
+                prob = 0.0
+            if prob <= 0:
+                continue
+            r = reward_fn(1, a, o)
+            tau_1 = (a, o)
+            v_next = V_values.get(tau_1, 0.0)
+            q_val += prob * (r + v_next)
+        V_values[([], a)] = q_val
+
+    # Root: V_1(∅) = max_a Q_1(∅, a)
+    q_root = [V_values[([], a)] for a in range(A)]
+    best_a_root = int(np.argmax(q_root))
+    policy_tree.set_action((), best_a_root)
+    V1 = max(q_root)
+
+    return policy_tree, V1
+
+
 def kraus_apply(rho: np.ndarray, kraus_ops: list[np.ndarray]) -> np.ndarray:
     """Apply a Kraus map to a density matrix.
 
