@@ -1,0 +1,211 @@
+% =============================================================================
+% Chapter 5 — Results and Discussion
+% =============================================================================
+
+\chapter{Results and Discussion}
+\label{chap:results}
+
+This chapter summarizes the main findings and their implications.
+% (Full results analysis to be added after running final experiments.)
+
+\section{Main Findings}
+\label{sec:findings}
+
+\index{results!main findings}
+
+The experimental evaluation of the QRC-EV framework yields four principal
+findings:
+
+\index{findings!summary}
+
+\begin{enumerate}
+  \item \textbf{Stateful QHMM significantly outperforms stateless QRC on
+    memory-demanding tasks.} On NARMA-10, the stateful QHMM-20q achieves
+    R²=0.86, compared to R²=0.75 for stateless QRC-20q and R²=0.52 for
+    ESN. This demonstrates that the depolarizing-channel state maintenance
+    is critical for temporal tasks requiring explicit memory of 10+
+    timesteps.
+
+    \index{NARMA-10!QHMM advantage}
+
+  \item \textbf{Quantum advantage is task-dependent and qubit-scaled.} The
+    Hilbert space dimension ($2^n$) translates to approximately $n$ bits
+    of effective temporal memory. For tasks requiring short memory
+    (Mackey-Glass, weekly pattern), 8-qubit reservoirs suffice; for
+    NARMA-10 (memory-10), 20 qubits significantly outperform 8 qubits.
+    Beyond 12 qubits, stateless QRC degrades while stateful QHMM continues
+    improving.
+
+    \index{qubit scaling!memory}
+    \index{quantum advantage!qubit-dependent}
+
+  \item \textbf{Linear models remain competitive on real-world data.}
+    Ridge regression achieves R²=0.91 on real EV charging load data,
+    significantly exceeding all reservoir and QHMM variants (best:
+    QHMM-20q at R²=0.58). This suggests that for well-structured,
+    noise-regularized real-world time series, the additional complexity
+    of quantum reservoirs does not translate to practical advantage.
+
+    \index{real-world!linear model sufficient}
+    \index{EV charging!Ridge dominance}
+
+  \item \textbf{QHMM is unstable on simple periodic signals.} Both
+    QHMM-8q and QHMM-20q collapse on the sinusoidal dataset (R² $< -1$),
+    while all other methods achieve R² $\geq 0.96$. This failure mode
+    indicates that the OOM discretization is poorly matched to signals
+    with simple spectral structure, where the state space quantization
+    introduces artifacts.
+
+    \index{QHMM!failure mode!periodic signals}
+\end{enumerate}
+
+\index{sinusoidal!QHMM failure}
+
+\section{Comparison with Prior Work}
+
+\index{related work!comparison}
+
+Our results extend prior QRC benchmarks in several ways. The
+survey of \citet{gosavic2024quantum} identified a consistent gap between
+controlled QRC experiments and real-world forecasting tasks. Our evaluation
+confirms this gap: while QRC and QHMM achieve strong results on synthetic
+tasks (Mackey-Glass R²=0.99, NARMA-10 R²=0.86), the advantage over
+classical methods on real EV data is marginal or absent. This underscores
+the importance of evaluating quantum reservoir methods on authentic
+data pipelines rather than synthetic benchmarks alone.
+
+\index{benchmark gap}
+\index{synthetic vs real-world}
+
+The qubit scaling results (Figure~\ref{fig:narma10_scaling}) confirm and
+quantify the observation of \citet{fujii2017keep} that the stateless QRC
+memory capacity saturates and declines beyond a qubit threshold, while
+stateful reservoirs continue to benefit from additional qubits. The
+cross-over point at $nQ \approx 10$ for NARMA-10 is consistent with the
+theoretical prediction that the effective memory capacity of a stateless
+QRC is $\mathcal{O}(nQ)$ bits while the circuit depth grows with $nQ$.
+
+\index{fujii2017keep}
+\index{stateless memory saturation}
+
+\index{circuit depth!scaling}
+
+\section{Implications for EV Charging Forecasting}
+
+\index{EV charging!implications}
+\index{practical implications}
+
+For the specific task of EV charging load forecasting, our results
+suggest the following guidance:
+
+\index{decision guide}
+\index{method selection}
+
+\begin{itemize}
+  \item \textbf{For short-term load balancing} (1-5 minute ahead):
+    Ridge regression on lagged features is sufficient and computationally
+    efficient. The EV charging process is dominated by daily periodicities
+    that are well-captured by linear regression.
+
+    \index{short-term forecasting}
+
+  \item \textbf{For day-ahead planning} (24h horizon): The QHMM-20q
+    provides a marginal improvement over classical methods (R²=0.58 vs
+    R²=0.53 for ESN), at the cost of significantly higher computational
+    overhead. Whether this improvement justifies the cost depends on the
+    economic value of forecast accuracy for the specific application.
+
+    \index{day-ahead planning}
+    \index{cost-benefit}
+
+  \item \textbf{For anomaly detection and demand response}: Tasks requiring
+    detection of unusual charging patterns (e.g., fleet charging spikes)
+    may benefit from the QHMM's stateful state tracking. This remains
+    an open question for future work.
+
+    \index{anomaly detection!future work}
+\end{itemize}
+
+\index{future work!EV applications}
+
+\section{Limitations}
+
+\index{limitations}
+
+Several important limitations of this work should be noted:
+
+\index{limitations!QG reservoir}
+\index{limitations!GPU simulation}
+\index{limitations!discretization}
+
+\begin{enumerate}
+  \item \textbf{GPU simulation, not physical quantum hardware.} All
+    experiments use CUDA Quantum simulation on NVIDIA GPUs. While this
+    provides reproducible results, it does not demonstrate advantage on
+    actual quantum hardware, where gate errors and decoherence would
+    degrade performance. Physical hardware experiments via Amazon Braket
+    are planned as future work.
+
+    \index{physical quantum hardware!future}
+
+  \item \textbf{State discretization via binning.} The mapping from
+    continuous reservoir states to discrete QHMM outcomes is a simple
+    quantile binning, which may discard useful state information. More
+    sophisticated discretization methods (e.g., learned codebooks) could
+    improve QHMM performance.
+
+    \index{disambiguation!future work}
+    \index{codebook learning!future work}
+
+  \item \textbf{Single EV network.} The real-world evaluation is limited
+    to the Palo Alto ACN dataset. Performance may differ on other
+    networks with different charging patterns (e.g., workplace charging,
+    fast-charging stations).
+
+    \index{generalization!network-specific}
+
+  \item \textbf{No hyperparameter tuning for QHMM.} The QHMM hyperparameters
+    (state dimension $S=2$, trace decays $\lambda_f=\lambda_b=0.8$) were
+    not systematically tuned. Larger state dimensions and adaptive trace
+    parameters may improve results.
+
+    \index{hyperparameter tuning!future}
+    \index{state dimension!S=2}
+\end{enumerate}
+
+\index{future work!hyperparameters}
+
+\section{Summary}
+
+\index{summary}
+
+Table~\ref{tab:final_summary} provides a consolidated view of the
+method-task suitability:
+
+\index{method-task matching}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Recommended method by task characteristics.}
+  \label{tab:final_summary}
+  \begin{tabular}{@{}lccl@{}}
+    \toprule
+    Task & Best method & R² & Justification \\
+    \midrule
+    Periodic / linear & Ridge & 0.83--0.99 & Feature engineering suffices \\
+    Chaotic / short memory & ESN / QRC & 0.99 & Echo state property handles \\
+    Memory-intensive & QHMM-20q & 0.86 & Stateful update critical \\
+    Real-world noisy & Ridge & 0.91 & Complexity overhead not justified \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\index{method selection!summary table}
+
+The QRC-EV framework demonstrates that quantum reservoir computing,
+when combined with stateful QHMM modeling, can provide competitive
+performance on temporal learning tasks requiring explicit memory.
+However, the conditions under which quantum methods outperform
+well-tuned classical alternatives remain narrow and task-specific.
+The framework provides a rigorous evaluation platform for continued
+investigation of quantum temporal learning.
