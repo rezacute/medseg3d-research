@@ -1,0 +1,204 @@
+% =============================================================================
+% Chapter 6 — Conclusion
+% =============================================================================
+
+\chapter{Conclusion}
+\label{chap:conclusion}
+
+\index{conclusion}
+
+\section{Summary of Contributions}
+
+\index{contributions!summary}
+
+This work presented \textbf{QRC-EV}, a complete framework for quantum
+reservoir computing applied to electric vehicle charging load forecasting.
+We demonstrated that the combination of a GPU-accelerated quantum reservoir
+with a stateful Quantum Hidden Markov Model enables competitive performance
+on temporal learning tasks, particularly those requiring explicit memory
+of long histories.
+
+\index{contributions!QRC-EV framework}
+\index{contributions!QHMM-OOM}
+\index{contributions!TD(λ)}
+
+The specific technical contributions are:
+
+\index{contributions}
+\begin{enumerate}
+  \item \textbf{Stateful GPU quantum reservoir.} We implemented a
+    CUDA Quantum-based reservoir with input scaling, sparse ZZ gates,
+    and depolarizing channel state maintenance, scalable to 30 qubits
+    on NVIDIA Blackwell hardware via Amazon Braket. The stateful update
+    prevents the memory collapse observed in stateless QRC beyond
+    10 qubits.
+
+    \index{stateful reservoir!implementation}
+
+  \item \textbf{QHMM-OOM with forward-backward smoothing and TD($\lambda$)
+    eligibility traces.} We formalized the QHMM as an Observable Operator Model,
+    enabling exact trajectory probability computation and smoothing. The
+    TD($\lambda$) trace mechanism allows credit assignment without
+    backpropagation through the quantum processor, making online learning
+    tractable.
+
+    \index{TD($\lambda$)!contribution}
+    \index{forward-backward!contribution}
+
+  \item \textbf{Comprehensive benchmarks.} We evaluated QRC-EV on five
+    datasets (synthetic and real-world EV data), demonstrating that the
+    stateful QHMM achieves the best performance on memory-intensive tasks
+    (NARMA-10, R²=0.86) while remaining competitive on periodic and
+    chaotic tasks. On real EV charging data, classical Ridge regression
+    (R²=0.91) significantly outperforms all quantum methods.
+
+    \index{benchmark!comprehensive}
+\end{enumerate}
+
+\index{key result!QHMM NARMA-10}
+\index{key result!Ridge EV dominance}
+
+\section{Main Takeaways}
+
+\index{takeaways}
+
+The experimental results lead to three high-level conclusions:
+
+\index{conclusions}
+
+\begin{enumerate}
+  \item \textbf{State is essential for quantum temporal learning.} The
+    divergence between stateless QRC and stateful QHMM on NARMA-10
+    (Figure~\ref{fig:narma10_scaling}) demonstrates that the depolarizing
+    channel state maintenance is the critical ingredient enabling quantum
+    reservoirs to solve tasks requiring long memory horizons. Without state,
+    the effective memory capacity of a quantum circuit saturates and
+    declines at relatively low qubit counts.
+
+    \index{memory!stateful requirement}
+
+  \item \textbf{Quantum advantage is real but narrow.} The QHMM-20q
+    achieves R²=0.86 on NARMA-10, outperforming ESN (R²=0.52) and
+    Ridge (R²=0.40) by 65\% and 115\% respectively. This is a meaningful
+    advantage on a task that explicitly requires memory of 10 steps.
+    However, this advantage does not transfer to the real-world EV charging
+    task, where Ridge regression dominates. The conditions under which
+    quantum temporal learning outperforms classical alternatives remain
+    task-specific.
+
+    \index{quantum advantage!narrow}
+    \index{quantum advantage!conditions}
+
+  \item \textbf{Method-task matching is critical.} For EV charging
+    infrastructure operators, the choice between quantum and classical
+    methods should be driven by the specific forecasting horizon and
+    the underlying signal structure. For short-term load balancing,
+    Ridge regression is sufficient and computationally efficient. For
+    applications requiring detection of subtle temporal anomalies or
+    multi-day demand forecasting, the QHMM's stateful modeling may
+    provide marginal benefit at significant computational cost.
+
+    \index{method selection!practical guide}
+\end{enumerate}
+
+\index{practical recommendations}
+
+\section{Open Questions and Future Work}
+
+\index{future work}
+
+This work opens several directions for further investigation:
+
+\index{future directions}
+
+\begin{enumerate}
+  \item \textbf{Physical quantum hardware evaluation.} All experiments
+    reported here use CUDA Quantum simulation on NVIDIA GPUs. An important
+    next step is to replicate these benchmarks on actual quantum processors
+    accessible via Amazon Braket (e.g., IonQ Forte, Rigetti Aspen). The
+    effect of gate errors and decoherence on QHMM performance remains
+    an open empirical question.
+
+    \index{physical quantum hardware}
+    \index{Amazon Braket!physical QPUs}
+
+  \item \textbf{Learned state discretization.} The current binning-based
+    discretization of reservoir states into QHMM outcomes is a simple
+    quantile approach that may discard useful state information. Future
+    work should explore learned discretization methods, such as vector
+    quantization or codebook learning, that adaptively partition the
+    reservoir state space to maximize trajectory likelihood.
+
+    \index{disambiguation!learned}
+    \index{vector quantization!future}
+
+  \item \textbf{Larger-scale EV forecasting.} The current evaluation
+    is limited to the Palo Alto ACN network with 5000 hourly samples.
+    Future work should evaluate on larger EV charging datasets spanning
+    multiple networks, longer time horizons, and diverse geographical
+    contexts. The relationship between network topology and QHMM structure
+    is a particularly interesting direction.
+
+    \index{generalization!larger datasets}
+
+  \item \textbf{Adaptive TD($\lambda$) hyperparameters.} The trace decay
+    parameters $\lambda_f$ and $\lambda_b$ were fixed at 0.8 throughout
+    this work. An adaptive scheme that adjusts these parameters based on
+    the observed TD error variance could improve credit assignment in
+    non-stationary environments.
+
+    \index{adaptive TD(λ)}
+
+  \item \textbf{Integration with reinforcement learning for EV charging
+    scheduling.} The QHMM's optimistic planning module produces action
+    sequences that maximize expected cumulative reward. An end-to-end
+    system that combines QHMM forecasting with RL-based charging
+    infrastructure control (e.g., peak shaving, load balancing) would
+    demonstrate practical utility.
+
+    \index{reinforcement learning!charging scheduling}
+    \index{peak shaving}
+\end{enumerate}
+
+\index{RL!EV charging}
+\index{grid management}
+
+\section{Closing Remarks}
+
+\index{closing}
+
+Quantum reservoir computing represents a promising direction for temporal
+machine learning, particularly for tasks requiring explicit memory of
+long histories. The QRC-EV framework demonstrates that the gap between
+controlled quantum experiments and practical time-series forecasting is
+narrowing—but not yet closed. The strongest practical advantage observed
+in this work is on the NARMA-10 memory task, not on real-world EV
+charging data. This underscores the importance of rigorous, task-specific
+evaluation of quantum methods against well-tuned classical baselines.
+
+\index{quantum ML!practical outlook}
+
+The QHMM formalism provides a mathematically principled framework for
+understanding the representational capacity of quantum dynamics for
+temporal modeling. The forward-backward algorithm, eligibility traces,
+and optimistic planning components are not specific to the CUDA Quantum
+implementation—they apply to any quantum system whose dynamics can be
+represented as CPTP channels. As quantum hardware improves, these methods
+may become increasingly relevant.
+
+\index{outlook!quantum ML}
+\index{long-term outlook}
+
+We hope this framework serves as a foundation for continued investigation
+of quantum temporal learning in practical settings.
+
+\index{reproducibility}
+\index{open source}
+
+\begin{itemize}
+  \item \textbf{Code}: \url{https://github.com/rezacute/medseg3d-research}
+  \item \textbf{Paper}: available as GitHub Actions artifact on branch
+    \texttt{feature/agentic-research-workflow}
+  \item \textbf{Results}: documented in \texttt{results/} with
+    random seeds for reproducibility
+\end{itemize}
