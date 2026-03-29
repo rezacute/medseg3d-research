@@ -1,0 +1,113 @@
+% =============================================================================
+% Appendix A — Hyperparameters
+% =============================================================================
+
+\chapter{Hyperparameters and Experimental Protocol}
+\label{app:hyperparameters}
+
+\section{Quantum Reservoir}
+
+All QRC experiments use the following reservoir configuration unless
+otherwise noted:
+
+\begin{table}[htbp]
+  \centering
+  \caption{Default reservoir hyperparameters.}
+  \label{tab:reservoir_hyperparams}
+  \begin{tabular}{@{}llc@{}}
+    \toprule
+    Parameter & Symbol & Value \\
+    \midrule
+    Number of qubits & $n$ & 8, 16, 20, 30 (ablation) \\
+    Input feature dimension & $d_{\mathrm{in}}$ & 8 \\
+    Reservoir feature dimension & $d_{\mathrm{res}}$ & 64 \\
+    Spectral radius & $\rho(W)$ & 0.9 \\
+    Leaking rate & $\alpha$ & 0.3 \\
+    Readout regularization & $\lambda_{\mathrm{ridge}}$ & 1.0 \\
+    Input scaling & $\gamma_{\mathrm{input}}$ & 0.5 \\
+    Depolarizing probability & $p_{\mathrm{depol}}$ & 0.01 \\
+    Shot-based measurement & $N_{\mathrm{shots}}$ & 4096 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\index{hyperparameters!reservoir}
+\index{hyperparameters!ablation}
+
+\section{QHMM-OOM}
+
+\index{hyperparameters!QHMM}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Default QHMM-OOM hyperparameters.}
+  \label{tab:qhmm_hyperparams}
+  \begin{tabular}{@{}llc@{}}
+    \toprule
+    Parameter & Symbol & Value \\
+    \midrule
+    State dimension & $S$ & 2 \\
+    Number of actions & $A$ & 2 \\
+    Number of outcomes & $O$ & 2 \\
+    Number of channels & $L$ & 1 \\
+    SDP solver & -- & MOSEK \\
+    OMLE max iterations & $\max_{\mathrm{iter}}$ & 100 \\
+    OMLE convergence tol. & $\epsilon_{\mathrm{tol}}$ & $10^{-6}$ \\
+    Forward trace decay & $\lambda_f$ & 0.8 \\
+    Backward trace decay & $\lambda_b$ & 0.8 \\
+    Discount factor & $\gamma$ & 0.9 \\
+    Learning rate & $\eta$ & 0.01 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\index{hyperparameters!OMLE}
+
+\section{Datasets}
+
+\index{hyperparameters!datasets}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Dataset specifications.}
+  \label{tab:dataset_specs}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Dataset & $N_{\mathrm{train}}$ & $N_{\mathrm{test}}$ &
+    Prediction horizon & Source \\
+    \midrule
+    Sinusoidal & 4000 & 1000 & 1, 5, 10 & Synthetic \\
+    Mackey-Glass ($\tau=17$) & 4000 & 1000 & 1, 5, 10 & Synthetic \\
+    NARMA-10 & 4000 & 1000 & 1, 5, 10 & Synthetic \\
+    Weekly pattern & 4000 & 1000 & 1, 5, 10 & Synthetic \\
+    ACN-Data & 3000 & 1000 & 1, 6, 24 & Real EV \\
+    Palo Alto EV & 3000 & 1000 & 1, 6, 24 & Real EV \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\index{datasets!EV charging}
+\index{datasets!Mackey-Glass}
+\index{datasets!NARMA}
+
+\section{Baselines}
+
+\index{baselines}
+
+\begin{itemize}
+  \item \textbf{Ridge regression}: $\alpha = 1.0$, MinMaxScaler for input
+    and output normalization.
+  \item \textbf{ESN}: $N = 200$ units, spectral radius $= 0.9$,
+    leaking rate $\alpha = 0.3$, input scaling $= 0.5$.
+  \item \textbf{LSTM}: 2 layers, 128 hidden units per layer,
+    dropout $= 0.2$, trained with Adam ($\mathrm{lr} = 10^{-3}$),
+    early stopping on validation loss.
+  \item \textbf{TFT}: Temporal Fusion Transformer with
+    $d_{\mathrm{model}} = 128$, $n_{\mathrm{heads}} = 4$,
+    $n_{\mathrm{layers}} = 3$, trained with AdamW.
+\end{itemize}
+
+\index{LSTM}
+\index{Temporal Fusion Transformer}
+\index{Echo State Network}
+\index{Ridge regression}

@@ -1,0 +1,125 @@
+\documentclass[12pt, a4paper, oneside, notitlepage]{report}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{xcolor}
+\usepackage{geometry}
+\geometry{margin=1.2in}
+
+% =============================================================================
+% Macros
+% =============================================================================
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\lstset{basicstyle=\ttfamily\small, numbers=left, stepnumber=1,
+  showstringspaces=false, breaklines=true, frame=single,
+  backgroundcolor=\color{white}, keywordstyle=\color{blue},
+  commentstyle=\color{codegreen}, stringstyle=\color{codepurple}}
+
+\theoremstyle{plain}
+\newtheorem{definition}{Definition}[chapter]
+\newtheorem{assumption}{Assumption}[chapter]
+\newtheorem{example}{Example}[chapter]
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\tr}{tr}
+\DeclareMathOperator{\id}{id}
+\DeclareMathOperator{\Real}{Re}
+\DeclareMathOperator{\Imag}{Im}
+\DeclareMathOperator{\supp}{supp}
+
+% =============================================================================
+% Title Page
+% =============================================================================
+\begin{document}
+\pagenumbering{roman}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\LARGE\bfseries
+    Quantum Reservoir Computing for EV Charging Load Forecasting\\
+    with Quantum Hidden Markov Models and Eligibility Traces\par}
+  \vspace{1.5cm}
+  {\large\bfseries Riza Syah\par}
+  \vspace{0.5cm}
+  {\large Department of Quantum Computing\par}
+  \vspace{2cm}
+  {\large A paper submitted in partial fulfillment\\
+    of the requirements for the degree of\\
+    Master of Science in Quantum Artificial Intelligence\par}
+  \vspace{2cm}
+  {\large\.today\par}
+  \vspace{1.5cm}
+  \textbf{Abstract:}
+  \parbox{0.85\textwidth}{\small
+    We present QRC-EV, a complete Quantum Reservoir Computing framework for
+    forecasting electric vehicle charging load. The framework combines a
+    stateful GPU quantum reservoir (CUDA Quantum on NVIDIA hardware via
+    Amazon Braket) with a Quantum Hidden Markov Model (QHMM) whose
+    transition dynamics are learned via Online Maximum Likelihood
+    Estimation (OMLE) subject to complete positivity and trace
+    preservation (CPTP) constraints. The QHMM is represented as an
+    Observable Operator Model (OOM), enabling exact trajectory probability
+    computation via a forward-backward algorithm. We extend the framework
+    with TD($\lambda$) eligibility traces for temporal credit assignment,
+    allowing the model to learn from ongoing interaction without
+    backpropagation through the quantum processor. Comprehensive
+    benchmarks on synthetic (sinusoidal, Mackey-Glass, NARMA-10) and
+    real-world EV charging datasets (ACN-Data, Palo Alto) demonstrate
+    competitive forecasting performance compared to classical baselines
+    including Echo State Networks and LSTMs.}
+  \clearpage
+\end{titlepage}
+
+% =============================================================================
+% Acknowledgments
+% =============================================================================
+\chapter*{Acknowledgments}
+\addcontentsline{toc}{chapter}{Acknowledgments}
+I acknowledge the support of the NVIDIA CUDA Quantum team and Amazon Web
+Services for providing access to quantum-classical computing infrastructure.
+Special thanks to the members of the Quantum AI reading group for valuable
+feedback on early drafts.
+
+% =============================================================================
+% Table of Contents
+% =============================================================================
+\tableofcontents
+\listoffigures
+\listoftables
+
+% =============================================================================
+% Main text
+% =============================================================================
+\pagenumbering{arabic}
+\include{chapter1_introduction}
+\include{chapter2_background}
+
+% =============================================================================
+% Bibliography
+% =============================================================================
+\bibliographystyle{plain}
+\bibliography{refs}
+\addcontentsline{toc}{chapter}{Bibliography}
+
+% =============================================================================
+% Appendix
+% =============================================================================
+\appendix
+\include{appendix_hyperparameters}
+\include{appendix_proofs}
+
+\end{document}

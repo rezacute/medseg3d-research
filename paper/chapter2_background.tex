@@ -1,0 +1,513 @@
+% =============================================================================
+% Chapter 2 — Background and Mathematical Foundations
+% =============================================================================
+
+\chapter{Literature and Mathematical Foundations}
+\label{chap:background}
+
+This chapter establishes the mathematical and conceptual foundations
+necessary for the QRC-EV framework. We begin with reservoir computing
+(\S\ref{sec:rc}) and its quantum counterpart (\S\ref{sec:qrc_formalism}),
+then develop the theory of quantum channels and the Choi-Jamiołkowski
+representation (\S\ref{sec:quantum_channels}), the HMM-to-OOM
+connection (\S\ref{sec:hmm_oom}), the forward-backward algorithm
+(\S\ref{sec:forward_backward}), and finally TD($\lambda$) eligibility
+traces (\S\ref{sec:td_lambda}).
+
+% =============================================================================
+% §2.1  Classical Reservoir Computing
+% =============================================================================
+
+\section{Classical Reservoir Computing and Echo State Networks}
+\label{sec:rc}
+
+Reservoir Computing (RC) refers to a family of temporal machine learning
+frameworks in which a \emph{fixed} dynamical system—the \emph{reservoir}—
+maps an input time series to a high-dimensional feature space; a
+subsequent \emph{readout} layer is the only component that is trained
+\citep{jaeger2004harnessing, jaeger2007echo, schrauwen2007rc}. The key
+property enabling learning without backpropagation through the reservoir
+is the \textbf{echo state property} (ESP):
+
+\begin{definition}[Echo State Property]
+\index{echo state property}
+A reservoir with state update $r_{t+1} = f(W_{\mathrm{in}} u_{t+1} + W r_t)$
+has the echo state property if, for any two input sequences
+$\{u_t\}$ and $\{u'_t\}$ that differ only in the distant past,
+the resulting reservoir states converge to each other as $t \to \infty$,
+independently of the initial reservoir state $r_0$.
+\end{definition}
+
+When the ESP holds, the reservoir acts as a \emph{universal temporal
+basis}: any bounded function of the input history can be approximated
+by a linear combination of reservoir features. Training reduces to solving
+a linear regression problem.
+
+An Echo State Network (ESN) instantiates this with a classical recurrent
+network:
+\begin{equation}
+r_{t+1} = (1 - \alpha) \, r_t + \alpha \, \tanh\!\bigl( W_{\mathrm{in}} u_{t+1}
+  + W r_t + W_{\mathrm{bias}} \bigr),
+\qquad
+y_t = W_{\mathrm{out}} \, r_t,
+\label{eq:esn_update}
+\end{equation}
+where $\alpha \in (0,1]$ is the leaking rate, $W_{\mathrm{in}} \in
+\mathbb{R}^{N \times d_{\mathrm{in}}}$ maps the $d_{\mathrm{in}}$-
+dimensional input to the $N$-dimensional reservoir, and $W \in
+\mathbb{R}^{N \times N}$ is the reservoir weight matrix with spectral
+radius $\rho(W) < 1$ to ensure the ESP. Only $W_{\mathrm{out}}}$ is
+trained, typically via Ridge regression.
+
+ESNs have demonstrated competitive performance on a range of temporal
+learning tasks including system identification, speech recognition, and
+chaotic time-series forecasting \citep{jaeger2004harnessing,
+verstraeten2007esn}. Their main limitation is the representational
+capacity of the reservoir, which is fundamentally bounded by the classical
+dynamics of the weight matrix.
+
+% =============================================================================
+% §2.2  Quantum Reservoir Computing
+% =============================================================================
+
+\section{Quantum Reservoir Computing}
+\label{sec:qrc_formalism}
+
+Quantum Reservoir Computing (QRC) replaces the classical reservoir with a
+quantum many-body system \citep{fujii2017keep, appert2023quantum,
+ghojeh2024quantum}. Consider an $n$-qubit quantum register initialized in
+a fixed state $\rho_0$. An input $u_t \in \mathbb{R}^{d_{\mathrm{in}}}$ is
+encoded as a parameterized unitary $U(u_t)$ acting on the register:
+
+\begin{equation}
+\rho_{t+1} = \mathcal{E}\!\bigl( U(u_{t+1}) \, \rho_t \, U(u_{t+1})^\dagger \bigr),
+\label{eq:qrc_update}
+\end{equation}
+where $\mathcal{E}$ is a dissipative channel (typically a depolarizing or
+amplitude-damping channel) that ensures the register relaxes toward a
+stationary state and prevents indefinite purity growth. The reservoir
+output at time $t$ is obtained by measuring a fixed set of observables
+$\{O_j\}$, producing a feature vector
+\begin{equation}
+\phi_t = \bigl( \operatorname{tr}[O_1 \rho_t],
+               \ldots, \operatorname{tr}[O_m \rho_t] \bigr)^\top
+\in \mathbb{R}^m.
+\end{equation}
+The readout $y_t = W_{\mathrm{out}} \phi_t$ is trained exactly as in
+the classical ESN case.
+
+The quantum echo state property (QESP) is defined analogously to the
+classical case \citep{fujii2017keep}: the state $\rho_t$ should become
+insensitive to the initial state $\rho_0$ as $t$ increases, provided the
+input is bounded. For a system near a unique fixed point of the channel
+$\mathcal{E}$, the QESP holds automatically; for systems with multiple
+stationary states the condition becomes non-trivial.
+
+The advantage of QRC over classical RC rests on the exponential
+dimensionality of the Hilbert space ($\dim \mathcal{H} = 2^n$) and the
+capacity of quantum dynamics to generate entanglement. However, the
+accessible information in $\phi_t$ is ultimately limited by the
+measurement observables and by decoherence. The practical question is
+whether the \emph{effective} dimensionality of the quantum feature space
+exploited by the readout exceeds what a classical reservoir of comparable
+size can achieve.
+
+Recent experimental work has demonstrated QRC on physical quantum
+hardware including photonic systems \citep{Dumitrescu2018}, trapped ions
+\citep{Chen2020}, and superconducting qubits \citep{Zheng2021}. These
+proofs-of-concept are encouraging but typically evaluate on low-dimensional
+synthetic tasks. The benchmark gap between controlled experiments and
+real-world forecasting remains a significant obstacle
+\citep{gosavic2024quantum, gonzalez2024benchmark}.
+
+% =============================================================================
+% §2.3  Quantum Channels and the Choi-Jamiołkowski Representation
+% =============================================================================
+
+\section{Quantum Channels and the Choi-Jamiołkowski Representation}
+\label{sec:quantum_channels}
+
+A \textbf{quantum channel} $\Phi: \mathcal{B}(\mathcal{H}_{\mathrm{in}})
+\to \mathcal{B}(\mathcal{H}_{\mathrm{out}})$ is a completely-positive,
+trace-preserving (CPTP) linear map. The Choi-Jamiołkowski theorem
+provides an equivalent representation that is central to our
+formalism: every CPTP map $\Phi$ is uniquely associated with a
+positive semidefinite matrix $J(\Phi) \in \mathcal{B}(\mathcal{H}_{\mathrm{in}}
+\otimes \mathcal{H}_{\mathrm{out}})$ called the \textbf{Choi matrix}:
+
+\begin{equation}
+J(\Phi) = (\operatorname{id} \otimes \Phi)\!\bigl(
+  \ket{\Omega}\!\bra{\Omega} \bigr),
+\qquad
+\ket{\Omega} = \frac{1}{\sqrt{d_{\mathrm{in}}}}
+\sum_{i=0}^{d_{\mathrm{in}}-1} \ket{i} \otimes \ket{i},
+\label{eq:choi_def}
+\end{equation}
+where $d_{\mathrm{in}} = \dim \mathcal{H}_{\mathrm{in}}$ and
+$\{\ket{i}\}$ is a fixed orthonormal basis. Conversely, $\Phi$ can be
+reconstructed from $J(\Phi)$ via
+\begin{equation}
+\Phi(\rho) = \operatorname{tr}_{\mathrm{in}}\!\bigl[
+  (I_{\mathrm{out}} \otimes \rho^\top) \, J(\Phi) \bigr].
+\end{equation}
+
+The Choi matrix admits a convenient \textbf{Kraus representation}: if
+$\{K_l\}$ are operators satisfying $\sum_l K_l^\dagger K_l = I$, then
+\begin{equation}
+J\!\bigl(\Phi\bigr) = \sum_l \ket{K_l}\!\bra{K_l},
+\qquad
+\ket{K_l} = (I \otimes K_l) \ket{\Omega},
+\end{equation}
+and the channel action is $\Phi(\rho) = \sum_l K_l \, \rho \, K_l^\dagger$.
+This representation is the foundation for the QHMM channel model used in
+this work.
+
+A crucial property is \textbf{trace preservation}: $\Phi$ is TP if and
+only if $\operatorname{tr}_{\mathrm{out}}[J(\Phi)] = I_{\mathrm{in}}$.
+Complete positivity ensures that all eigenvalues of $J(\Phi)$ are
+non-negative. The CPTP constraints are essential for the physical
+validity of any learned channel.
+
+\index{Choi matrix}
+\index{Kraus operators}
+\index{CPTP}
+
+% =============================================================================
+% §2.4  Hilbert-Schmidt Space and Observable Operator Models
+% =============================================================================
+
+\section{Observable Operator Models and the Hilbert-Schmidt Representation}
+\label{sec:hmm_oom}
+
+The Observable Operator Model (OOM), introduced by
+\citet{jaeger2000oom}, is a generalization of the HMM that represents
+the dynamics of a stochastic process as linear operators on a
+finite-dimensional vector space. Consider a QHMM with state space
+dimension $S$, action set $\mathcal{A} = \{0, \ldots, A-1\}$, and
+outcome set $\mathcal{O} = \{0, \ldots, O-1\}$. Let $\mathcal{B}(\mathcal{H}_S)$
+be the space of $S \times S$ density matrices, and let
+$\{\mathcal{P}_\mu\}_{\mu=0}^{S^2-1}$ be an orthonormal basis of
+$\mathcal{B}(\mathcal{H}_S)$ under the Hilbert-Schmidt (HS) inner product
+$\langle P, Q \rangle_{\mathrm{HS}} = \operatorname{tr}[P^\dagger Q]$.
+A natural choice is the matrix-unit basis
+$P_{ij} = \ket{i}\!\bra{j}$.
+
+\begin{definition}[HS Vector]
+\index{Hilbert-Schmidt vector}
+For a density matrix $\rho \in \mathcal{B}(\mathcal{H}_S)$, its
+\textbf{HS vector} is
+\begin{equation}
+v(\rho) = \bigl( \langle \mathcal{P}_0, \rho \rangle_{\mathrm{HS}},
+               \ldots,
+               \langle \mathcal{P}_{S^2-1}, \rho \rangle_{\mathrm{HS}} \bigr)^\top
+\in \mathbb{R}^{S^2}.
+\end{equation}
+\end{definition}
+
+The crucial observation is that the dynamics of the QHMM can be encoded
+in a set of linear operators on $\mathbb{R}^{S^2}$. Define, for each
+transition label $(o, a, o', a')$ (current outcome, current action, next
+outcome, next action), an $S^2 \times S^2$ real matrix $A^{(o,a,o',a')}$
+with entries
+\begin{equation}
+A^{(o,a,o',a')}_{\mu,\nu}
+  = \operatorname{tr}\!\bigl[ \mathcal{P}_\mu^\dagger \,
+    \Phi^{(a')}_{o'} \!\bigl( \mathcal{E}\bigl(
+      \Phi^{(a)}_o(\mathcal{P}_\nu) \bigr) \bigr) \bigr],
+\label{eq:oom_A_def}
+\end{equation}
+where $\Phi^{(a)}_o$ is the instrument branch (a CPTP channel) for
+action $a$ and outcome $o$, and $\mathcal{E}$ is the channel modeling the
+quantum reservoir dynamics.
+
+With these operators, the OOM update rule for a trajectory
+$\tau = (a_1, o_1, \ldots, a_T, o_T)$ is
+\begin{equation}
+v_{t+1} = A^{(o_t, a_t, o_{t+1}, a_{t+1})} \, v_t,
+\qquad v_1 = v(\rho_1),
+\label{eq:oom_update}
+\end{equation}
+where $v_t$ is the HS vector of the \emph{filtered} density matrix after
+$t$ steps. The one-step probability (marginal likelihood) is
+\begin{equation}
+Z_t \equiv p(o_t \mid \tau_{1:t-1}) = \mathbf{1}^\top v_t,
+\qquad \mathbf{1} = (1, 1, \ldots, 1)^\top,
+\label{eq:oom_marginal}
+\end{equation}
+and the full trajectory probability is
+\begin{equation}
+p(\tau) = \mathbf{1}^\top v_T = \prod_{t=1}^T Z_t.
+\label{eq:oom_trajectory}
+\end{equation}
+
+\index{OOM!transition operator}
+\index{OOM!forward algorithm}
+
+% =============================================================================
+% §2.5  The Forward-Backward Algorithm for OOM
+% =============================================================================
+
+\section{Forward-Backward Algorithm for OOM State Smoothing}
+\label{sec:forward_backward}
+
+The OOM framework naturally supports a forward-backward algorithm,
+analogous to the Baum-Welch algorithm for classical HMMs, for computing
+the posterior distribution over hidden states given a full trajectory.
+
+\index{forward-backward algorithm!OOM}
+\index{smoothing}
+
+Let $v_t$ denote the unnormalized forward state (HS vector of the
+subnormalized filtered state $\tilde\rho_t$) and $Z_t = \mathbf{1}^\top v_t$
+the marginal likelihood at step $t$. Define the \textbf{forward message}
+as the normalized state
+\begin{equation}
+\alpha_t = \frac{v_t}{Z_t} \in \mathbb{R}^{S^2},
+\qquad \sum_{\mu=0}^{S^2-1} \alpha_t[\mu] = 1.
+\label{eq:alpha_def}
+\end{equation}
+$\alpha_t[\mu]$ represents $p(\rho_t = \mathcal{P}_\mu \mid \tau_{1:t})$,
+the posterior probability of the hidden state being the $\mu$-th basis
+element given all observations up to time $t$.
+
+The \textbf{backward message} $\beta_t \in \mathbb{R}^{S^2}$ encodes the
+likelihood of future observations:
+\begin{equation}
+\beta_t[\mu] = p\bigl(\tau_{t+1:T} \mid \rho_t = \mathcal{P}_\mu, a_t, o_t\bigr).
+\label{eq:beta_def}
+\end{equation}
+The backward recurrence is
+\begin{equation}
+\beta_t = \bigl(A^{(o_t, a_t, o_{t+1}, a_{t+1})}\bigr)^\top \beta_{t+1}
+           \big/ Z_t,
+\qquad \beta_T = \mathbf{1},
+\label{eq:beta_recurrence}
+\end{equation}
+where the division by $Z_t$ corrects for the normalization used in the
+forward pass. The key difference from classical HMMs is that the backward
+operator uses the \emph{actual next action} from the trajectory, not the
+sum over all possible actions.
+
+\index{backward message}
+\index{smoothing posterior}
+
+The \textbf{smoothing posterior}—the state posterior conditioned on the
+full trajectory—is obtained by combining forward and backward messages:
+\begin{equation}
+\xi_t \equiv p\!\bigl(\rho_t = \mathcal{P}_\mu \mid \tau_{1:T}\bigr)
+        = \frac{\alpha_t[\mu] \, \beta_t[\mu]}
+               {\sum_{\nu=0}^{S^2-1} \alpha_t[\nu] \, \beta_t[\nu]}.
+\label{eq:smoothing_posterior}
+\end{equation}
+The denominator $\bar Z_t = \sum_\mu \alpha_t[\mu]\beta_t[\mu]$ equals
+$p(o_{t+1:T} \mid \tau_{1:t})$, the likelihood of the future given the
+past, and serves as a local model quality indicator.
+
+\index{smoothing posterior}
+\index{log-likelihood}
+
+The log-likelihood of the full trajectory follows from
+Eqs.\ \eqref{eq:oom_marginal} and \eqref{eq:oom_trajectory}:
+\begin{equation}
+\log p(\tau) = \sum_{t=1}^T \log Z_t.
+\label{eq:log_likelihood}
+\end{equation}
+
+A critical implementation detail: the backward recurrence
+\eqref{eq:beta_recurrence} uses $A^{(o_t,a_t,o_{t+1},a_{t+1})\top}$, the
+matrix transpose (not the conjugate transpose) of the forward operator.
+This is because the forward operator $A$ is real symmetric when the
+channel is unital, but more generally it is the HS inner product structure
+that determines the adjoint in the OOM representation.
+
+% =============================================================================
+% §2.6  TD($\lambda$) Eligibility Traces
+% =============================================================================
+
+\section{TD($\lambda$) Eligibility Traces for OOM Learning}
+\label{sec:td_lambda}
+
+TD($\lambda$) \citep{sutton1988learning, sutton2000review} provides a
+mechanism for temporal credit assignment in reinforcement learning. We
+adapt the classical TD($\lambda$) framework to the OOM setting by defining
+a value function over the forward message $\alpha_t$ and accumulating
+eligibility traces over the state space.
+
+\index{TD($\lambda$)}
+\index{eligibility traces}
+
+Define the \textbf{value function} as a linear function of the forward
+message:
+\begin{equation}
+V(\alpha_t; w) = \sum_{\mu=0}^{S^2-1} w_\mu \, \alpha_t[\mu] = w^\top \alpha_t,
+\qquad w \in \mathbb{R}^{S^2}.
+\label{eq:value_function}
+\end{equation}
+The TD error at step $t$ is
+\begin{equation}
+\delta_t = r_t + \gamma \, V(\alpha_{t+1}; w) - V(\alpha_t; w),
+\label{eq:td_error}
+\end{equation}
+where $r_t$ is the reward signal and $\gamma \in [0,1]$ is the discount
+factor. In the absence of an external reward, we use the
+\textbf{surprisal} $r_t = \log Z_t = \log p(o_t \mid \tau_{1:t-1})$ as an
+intrinsic reward, which encourages the model to predict likely observations.
+
+\index{surprisal}
+
+\textbf{Forward eligibility traces} accumulate the history of state
+visits:
+\index{forward trace}
+\begin{equation}
+e_t = \gamma \lambda_f \, e_{t-1} + \alpha_t,
+\qquad e_0 = \alpha_0,
+\label{eq:forward_trace}
+\end{equation}
+where $\lambda_f \in [0,1]$ is the forward trace decay parameter. When
+$\lambda_f = 0$, the trace reduces to the immediate state; when
+$\lambda_f = 1$, the trace accumulates uniformly over all history.
+
+\index{backward trace}
+\textbf{Backward eligibility traces} propagate TD errors backwards through
+time:
+\begin{equation}
+e^b_t = \alpha_t \, |\delta_t| + \gamma \lambda_b \, e^b_{t+1},
+\qquad e^b_T = \alpha_T,
+\label{eq:backward_trace}
+\end{equation}
+where $\lambda_b \in [0,1]$ is the backward trace decay and $|\delta_t|$
+weights the trace by the magnitude of the TD error, concentrating credit
+assignment on timesteps with large prediction errors.
+
+\index{combined trace}
+The \textbf{combined eligibility trace} used for parameter updates is the
+element-wise product
+\index{combined trace}
+\begin{equation}
+e^{\mathrm{comb}}_t = e_t \odot \tilde e^b_t,
+\qquad
+\tilde e^b_t = \frac{e^b_t}{\|e^b_t\|_\infty},
+\label{eq:combined_trace}
+\end{equation}
+which balances recency (from the forward trace) with error magnitude
+(from the backward trace).
+
+\index{TD($\lambda$)!parameter update}
+The OOM transition operator $A^{(o,a,o',a')}$ is updated using the
+combined trace:
+\index{parameter update}
+\begin{equation}
+\Delta A^{(o,a,o',a')} = \eta \, \delta_t \, e^{\mathrm{comb}}_t,
+\qquad A^{(o,a,o',a')} \leftarrow A^{(o,a,o',a')} + \Delta A^{(o,a,o',a')},
+\label{eq:a_update}
+\end{equation}
+where $\eta > 0$ is the learning rate. This update rule shifts the OOM
+dynamics to increase the probability of trajectories with high rewards,
+analogously to the policy gradient update in classical RL.
+
+The forward trace \eqref{eq:forward_trace} provides the \emph{forward
+view} of TD($\lambda$), which is statistically biased but has low
+variance; the backward trace \eqref{eq:backward_trace} provides the
+\emph{backward view}, which is unbiased but has high variance. Their
+combination follows the strategy established in classical TD($\lambda$)
+\citep{sutton2000review}.
+
+\index{TD($\lambda$)!forward view}
+\index{TD($\lambda$)!backward view}
+
+% =============================================================================
+% §2.7  OMLE: Maximum Likelihood Estimation for QHMM
+% =============================================================================
+
+\section{Online Maximum Likelihood Estimation for QHMM}
+\label{sec:omle}
+
+The OOM transition operators $\{A^{(o,a,o',a')}\}$ are parameterized by
+the underlying QHMM channels and instruments. Given a dataset of
+trajectories $\mathcal{D} = \{\tau^i\}_{i=1}^K$, the OMLE procedure
+estimates the QHMM parameters by maximizing the total log-likelihood
+subject to CPTP constraints.
+
+\index{OMLE}
+\index{CPTP constraints}
+
+Let $J(\mathcal{E}_l)$ be the Choi matrix of the $l$-th channel and
+$J(\Phi^{(a)}_o)$ the Choi matrix of the instrument branch for action $a$
+and outcome $o$. The optimization variables are these Choi matrices. The
+constraints are:
+\index{channel!CPTP}
+\index{instrument!CPTP}
+\begin{subequations}
+\label{eq:cptp_constraints}
+\begin{align}
+J(\mathcal{E}_l) &\succeq 0,
+& \operatorname{tr}_{\mathrm{out}}[J(\mathcal{E}_l)] &= I_S,
+& \forall\, l, \tag{2.7a} \\
+J(\Phi^{(a)}_o) &\succeq 0,
+& \sum_{o=0}^{O-1} \operatorname{tr}_{\mathrm{out}}[J(\Phi^{(a)}_o)] &= I_S,
+& \forall\, a. \tag{2.7b}
+\end{align}
+\end{subequations}
+
+\index{channel!trace-preserving}
+\index{instrument!trace-preserving}
+
+The SDP objective is
+\index{SDP!OMLE}
+\begin{equation}
+\max_{\{J(\mathcal{E}_l),\, J(\Phi^{(a)}_o)\}}
+\; \sum_{i=1}^K \sum_{t=1}^{T_i} \log Z^i_t,
+\qquad \text{s.t. } \eqref{eq:cptp_constraints},
+\label{eq:omle_objective}
+\end{equation}
+where $Z^i_t$ is the OOM marginal likelihood \eqref{eq:oom_marginal} for
+trajectory $i$ at time $t$, computed using the current parameter estimate.
+The problem is solved as a semidefinite program (SDP) using either MOSEK
+or SCS as the backend solver. After each SDP update, the Choi matrices
+are projected back onto the CPTP constraint manifold via the
+Jamiołkowski trace-preserving projection \citep{jiang2022structure}.
+
+\index{forward-backward algorithm!role in OMLE}
+The forward-backward algorithm (\S\ref{sec:forward_backward}) plays a
+dual role: it provides the smooth posterior \eqref{eq:smoothing_posterior}
+needed to evaluate the EM auxiliary function, and it provides the
+surprisal rewards $r_t = \log Z_t$ used in the TD($\lambda$) updates
+(\S\ref{sec:td_lambda}).
+
+% =============================================================================
+% §2.8  Optimistic Planning for Prediction
+% =============================================================================
+
+\section{Optimistic Planning for Trajectory Prediction}
+\label{sec:optimistic_planning}
+
+Given a learned QHMM, prediction requires selecting the action sequence
+that maximizes expected cumulative reward. This is a planning problem
+in a finite-horizon MDP. We use the \textbf{optimistic planning}
+algorithm \citep{buşoniu2020online}, which maintains a set of candidate
+models (one per QHMM partition) and selects the model with the highest
+expected value at the root.
+
+\index{optimistic planning}
+\index{MDP}
+
+For a set of $M$ candidate QHMM environments
+$\{\mathcal{M}^{(k)}\}_{k=1}^M$, each with root value estimate
+$V^{(k)}_1(\emptyset)$, the algorithm selects
+\begin{equation}
+k^* = \arg\max_{k \in [M]} V^{(k)}_1(\emptyset),
+\qquad
+\pi^* = \arg\max_{\pi \in \Pi^{(k^*)}} V^{\pi}_1(\emptyset),
+\label{eq:optimistic_plan}
+\end{equation}
+where $\Pi^{(k)}$ is the policy tree of the $k$-th model. The selected
+model's policy tree $\pi^*$ is then used to generate actions for the
+next prediction step. This approach efficiently handles the
+combinatorial explosion of action sequences by pruning low-value
+candidates early.
+
+\index{policy tree}
+\index{value function!root}
+
+This completes the mathematical foundation. The next chapter describes
+how these components are integrated into the end-to-end QRC-EV system.

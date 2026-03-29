@@ -1,0 +1,164 @@
+% =============================================================================
+% Chapter 1 — Introduction
+% =============================================================================
+
+\chapter{Introduction}
+\label{chap:intro}
+
+% =============================================================================
+% §1.1  Context and Motivation
+% =============================================================================
+
+\section{Context and Motivation}
+\label{sec:intro:context}
+
+The global transition toward sustainable transportation has produced an
+unprecedented growth in Electric Vehicle (EV) adoption. Managing the
+resulting charging infrastructure presents a \emph{time-series forecasting
+challenge} of considerable practical and economic magnitude: grid operators
+must balance load in real time, charging networks must schedule capacity,
+and energy providers must procure power days in advance. Accurate
+forecasting of EV charging demand—across hourly, daily, and weekly
+horizons—is therefore a critical enabling technology
+\citep{acaroglu2022acn, chen2020ev}.
+
+Classical machine learning approaches to this problem include recurrent
+neural networks (RNNs), Long Short-Term Memory networks (LSTMs)
+\citep{hochreiter1997lstm}, and Transformer-based models such as the
+Temporal Fusion Transformer (TFT) \citep{lim2019tft}. These methods achieve
+strong performance on short-term prediction but require extensive
+training data, large parameter counts, and significant computational
+resources for inference at scale. Echo State Networks (ESNs)
+\citep{jaeger2004harnessing}—a form of reservoir computing—offer a
+lightweight alternative in which only the readout layer is trained,
+leaving the reservoir dynamics fixed. ESNs exploit the echo state
+property to reliably encode temporal dependencies without gradient-based
+learning.
+
+Despite their appeal, ESNs operate on classical hardware, and their
+representational capacity is fundamentally bounded by the classical
+dynamics of their reservoir. A natural question is whether quantum
+systems, whose Hilbert-space dimension grows exponentially with the
+number of qubits, can provide richer temporal representations at
+comparable or lower physical resource cost.
+
+% =============================================================================
+% §1.2  Quantum Reservoir Computing
+% =============================================================================
+
+\section{Quantum Reservoir Computing}
+\label{sec:intro:qrc}
+
+Quantum Reservoir Computing (QRC) \citep{jaeger2004harnessing,
+fujii2017keep, appert2023quantum} proposes to replace the classical
+reservoir with a quantum system: the input drives the evolution of a
+quantum register, and the register's state at each timestep is measured to
+produce a feature vector for a classical readout. If the quantum system
+exhibits the \emph{quantum echo state property}—analogous to the echo
+state property—its dynamics act as a universal black-box model for
+temporal computation.
+
+The practical appeal of QRC rests on two pillars. First, the quantum
+system is \emph{not trained}; only the measurement operators and the
+classical readout are optimized. This sidesteps the classical
+barriers to training quantum neural networks in the NISQ era. Second,
+quantum dynamics—particularly those near the edge of quantum chaos—can
+generate entanglement and complex correlations that are believed to exceed
+what classically simulable systems can produce efficiently
+\citep{arute2019quantum, boixo2018characterizing}. This motivated a
+series of experimental demonstrations showing quantum advantage for
+specific temporal tasks
+\citep{ Dumitrescu2018, Chen2020, Zheng2021, Ollitrault2023}.
+
+Nevertheless, the practical advantage of QRC on real-world forecasting
+tasks—particularly in the high-stakes, noisy regime of energy
+infrastructure—remains an open question. Published benchmarks are
+dominated by synthetic tasks (Mackey-Glass, NARMA) and small-scale
+laboratory settings, leaving a significant gap between controlled
+experiments and deployable forecasting systems
+\citep{gosavic2024quantum, gonzalez2024benchmark}.
+
+% =============================================================================
+% §1.3  This Work
+% =============================================================================
+
+\section{This Work: QRC-EV Forecasting System}
+\label{sec:intro:this_work}
+
+This paper presents a complete \textbf{Quantum Reservoir Computing
+framework for EV charging load forecasting} (QRC-EV) that bridges this
+gap. Our contributions are organized along three dimensions:
+
+\subsection{Quantum-Classical Architecture}
+We implement a \textbf{stateful GPU quantum reservoir} using NVIDIA's
+CUDA Quantum platform \citep{nvidiacudaq} integrated with Amazon Braket
+\citep{amazonbraket}. The reservoir operates on up to 30 qubits with
+input-scaled parametric gates, maintaining numerical stability across
+long input sequences. The reservoir state is evolved via a
+Lindblad-style dissipative channel, producing a feature map that is
+subsequently processed by a classical Ridge regression readout. This
+design runs entirely on cloud GPU infrastructure without the need for
+physical quantum hardware access, enabling reproducible large-scale
+experiments.
+
+\subsection{Quantum Hidden Markov Model with Eligibility Traces}
+Purely reservoir-based approaches treat the quantum state as a passive
+temporal feature extractor. We instead pair the reservoir with a
+\textbf{Quantum Hidden Markov Model (QHMM)} whose parameters are learned
+via \textbf{Online Maximum Likelihood Estimation (OMLE)} subject to
+complete positivity and trace preservation (CPTP) constraints. The QHMM
+is represented as an \textbf{Observable Operator Model (OOM)} whose
+transition structure is learned from trajectory data using a
+forward-backward algorithm for state smoothing, analogous to the
+Baum-Welch algorithm for classical HMMs.
+
+Critically, we extend the QHMM-OOM framework with
+\textbf{TD($\lambda$) eligibility traces} for temporal credit assignment.
+The forward trace accumulates the forward-message state history;
+the backward trace propagates TD errors; their product enables
+efficient parameter updates without full backpropagation through time.
+This allows the QHMM to learn from ongoing interaction, making it
+suitable for online learning settings.
+
+\subsection{Comprehensive Benchmarks}
+We evaluate QRC-EV on four datasets spanning synthetic benchmarks
+(sinusoidal, Mackey-Glass, NARMA-10) and real-world EV charging data
+(ACN-Data, Palo Alto network). We compare against classical baselines
+(Ridge regression, ESN, LSTM) and ablate the contribution of each
+component (reservoir size, OOM smoothing, eligibility traces). Our
+results demonstrate that the QHMM-OMLE pipeline achieves competitive
+performance on multi-step forecasting, particularly at horizons where
+the classical reservoir provides an informative prior.
+
+% =============================================================================
+% §1.4  Paper Structure
+% =============================================================================
+
+\section{Paper Structure}
+\label{sec:intro:structure}
+
+The paper is organized as follows. Chapter~\ref{chap:background}
+reviews the necessary background: reservoir computing, quantum
+channels and the Choi-Jamiołkowski representation, the HMM-to-OOM
+connection, and the forward-backward algorithm. Chapter~\ref{chap:methods}
+presents our methods: the GPU reservoir architecture, the QHMM-OOM
+formalism with OMLE, the TD($\lambda$) trace mechanism, and the
+optimistic planning algorithm for prediction.
+Chapter~\ref{chap:experiments} describes the experimental setup,
+datasets, baselines, and evaluation protocol.
+Chapter~\ref{chap:results} presents and discusses the results.
+Chapter~\ref{chap:conclusion} concludes with implications and open
+questions.
+
+% =============================================================================
+% §1.5  Reproducibility Statement
+% =============================================================================
+
+\section*{Reproducibility Statement}
+\label{sec:intro:reproducibility}
+
+All code is publicly available at
+\url{https://github.com/rezacute/medseg3d-research}. Experiments use
+CUDA Quantum 0.6+ with Amazon Braket and can be run on any NVIDIA
+GPU with compute capability $\geq 8.0$. Hyperparameters and random
+seeds are documented in Appendix~\ref{app:hyperparameters}.

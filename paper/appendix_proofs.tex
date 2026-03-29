@@ -1,0 +1,98 @@
+% =============================================================================
+% Appendix B — Proofs and Derivations
+% =============================================================================
+
+\chapter{Proofs and Derivations}
+\label{app:proofs}
+
+\section{Derivation of the OOM Transition Operator}
+\index{OOM!derivation}
+
+We derive the OOM transition operator $A^{(o,a,o',a')}$ from the
+QHMM dynamics. Starting from the filtered density matrix
+$\tilde\rho_t = \mathcal{E}\bigl(\Phi^{(a_t)}_{o_t}(\rho_{t-1})\bigr)$,
+the HS vector evolves as:
+\index{Hilbert-Schmidt!vectorization}
+\index{Kraus operators!composition}
+
+\begin{align}
+v_{t+1}[\mu]
+  &= \langle \mathcal{P}_\mu, \tilde\rho_{t+1} \rangle_{\mathrm{HS}} \\
+  &= \Bigl\langle \mathcal{P}_\mu,
+      \sum_{o'} \Phi^{(a_{t+1})}_{o'} \!\bigl(
+        \mathcal{E}(\Phi^{(a_t)}_{o_t}(\mathcal{P}_\nu)) \bigr)
+    \Bigr\rangle_{\mathrm{HS}} \\
+  &= \sum_{o'} \operatorname{tr}\!\bigl[
+      \mathcal{P}_\mu^\dagger \,
+      \Phi^{(a_{t+1})}_{o'} \!\bigl(
+        \mathcal{E}(\Phi^{(a_t)}_{o_t}(\mathcal{P}_\nu)) \bigr)
+    \bigr] \\
+  &= \sum_{o'} A^{(o_t,a_t,o',a_{t+1})}_{\mu,\nu} \, v_t[\nu],
+\end{align}
+which recovers Eq.\ \eqref{eq:oom_update} of Chapter~\ref{chap:background}.
+
+\index{OOM!derivation}
+
+\section{TD($\lambda$) Convergence}
+\index{TD($\lambda$)!convergence}
+
+The combined trace update \eqref{eq:a_update} is a stochastic gradient
+descent step on the TD error objective. Under the standard assumptions of
+stochastic approximation \citep{sutton2000review}—specifically bounded
+rewards, a contracting value function, and a step-size schedule satisfying
+$\sum \eta_t = \infty$, $\sum \eta_t^2 < \infty$—the update converges
+almost surely to a fixed point of the TD($\lambda$) operator. The
+combining of forward and backward traces does not affect the fixed point
+(which is determined by the Bellman operator) but does affect the
+variance of the learning trajectory.
+
+\index{Bellman operator}
+\index{stochastic approximation}
+
+\section{Choi Matrix Trace-Preservation}
+\index{Choi matrix!trace preservation}
+
+For a channel $\Phi$ with Kraus operators $\{K_l\}$, the Choi matrix is
+\index{trace preservation!Choi matrix}
+\begin{equation}
+J(\Phi) = \sum_l \ket{K_l}\!\bra{K_l}.
+\end{equation}
+The partial trace over the output system is
+\index{partial trace}
+\begin{align}
+\operatorname{tr}_{\mathrm{out}}[J(\Phi)]
+  &= \sum_{l} \operatorname{tr}_{\mathrm{out}}\bigl[\ket{K_l}\!\bra{K_l}\bigr] \\
+  &= \sum_l (\operatorname{tr}_{\mathrm{out}} \ket{K_l}\!\bra{K_l}) \\
+  &= \sum_l K_l^\dagger K_l \\
+  &= I_{\mathrm{in}},
+\end{align}
+where the last line uses the Kraus normalization condition
+$\sum_l K_l^\dagger K_l = I$. This establishes that the constraint
+\eqref{eq:cptp_constraints}(a) is necessary and sufficient for
+trace-preservation.
+
+\index{Kraus normalization}
+\index{CPTP!necessary and sufficient}
+
+\section{Numerical Stability of the Forward-Backward Algorithm}
+\index{forward-backward!numerical stability}
+
+The forward recurrence $v_{t+1} = A^{(o_t,a_t,o_{t+1},a_{t+1})} v_t$ can
+produce numerically vanishing or exploding values for long trajectories.
+To mitigate this, we normalize at each step:
+\index{log-sum-exp trick}
+\index{numerical stability}
+\begin{equation}
+\log Z_t = \log\!\bigl(\mathbf{1}^\top v_t\bigr),
+\qquad
+\alpha_t = \frac{v_t}{\mathbf{1}^\top v_t},
+\qquad
+\tilde v_{t+1} = A^{(o_t,a_t,o_{t+1},a_{t+1})} \alpha_t,
+\end{equation}
+which is implemented in the code using the log-sum-exp trick to avoid
+floating-point overflow. The backward pass uses the same normalization
+at each step, ensuring that $\beta_t$ remains in a numerically stable
+range.
+
+\index{log-sum-exp}
+\index{forward-backward!scaling}

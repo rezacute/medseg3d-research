@@ -2,7 +2,7 @@ name: CI - Build & Test
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, feature/agentic-research-workflow]
   pull_request:
     branches: [main, develop]
 
@@ -43,3 +43,23 @@ jobs:
         with:
           file: ./coverage.xml
           fail_ci_if_error: false
+
+  paper:
+    runs-on: ubuntu-latest
+    container: registry.access.redhat.com/ubi8/texlive
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build paper
+        run: |
+          pdflatex -interaction=nonstopmode -output-directory=_build paper/main.tex
+          bibtex _build/main || true
+          pdflatex -interaction=nonstopmode -output-directory=_build paper/main.tex
+          pdflatex -interaction=nonstopmode -output-directory=_build paper/main.tex
+
+      - name: Upload PDF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: paper-pdf
+          path: _build/main.pdf
