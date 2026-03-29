@@ -89,3 +89,9 @@ paper/*.toc
 *.tmp
 *.temp
 .cache/
+
+# ---------- Hypothesis ----------
+.hypothesis/
+
+# ---------- Package builds ----------
+src/*.egg-info/
