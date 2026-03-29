@@ -1739,6 +1739,229 @@ class OOMModel:
             'loglikelihood': loglikelihood,
         }
 
+    def compute_eligibility_traces(
+        self,
+        actions: np.ndarray,
+        outcomes: np.ndarray,
+        rewards: Optional[np.ndarray] = None,
+        gamma: float = 0.9,
+        lambda_fwd: float = 0.8,
+        lambda_bwd: float = 0.8,
+        rho_init: Optional[np.ndarray] = None,
+        channel_idx: int = 0,
+    ) -> dict:
+        r"""Compute TD(λ) eligibility traces for OOM state value learning.
+
+        Implements forward-view TD(λ) using the OOM forward-backward framework.
+
+        Value function:  V(α_t) = Σ_μ w_μ · α_t[μ]   (linear in forward messages)
+        TD error:        δ_t   = r_t + γ·V(α_{t+1}) - V(α_t)
+                         for likelihood-based: r_t = log Z_t (observation log-prob)
+
+        The forward eligibility trace accumulates:
+            e_t[μ] = γ·λ_fwd · e_{t-1}[μ] + α_t[μ]
+
+        The backward eligibility trace (forward-view of BPTT) accumulates:
+            e^b_t[μ] = γ·λ_bwd · e^b_{t+1}[μ] + α_t[μ] · δ_t
+
+        The combined trace is used for parameter updates:
+            Δw_μ = η · e_t[μ] · δ_t
+
+        Args:
+            actions: Action indices, shape (T,).
+            outcomes: Outcome indices, shape (T,).
+            rewards: Reward signal r_t at each step. If None, uses log Z_t
+                (log marginal likelihood as intrinsic reward).
+                Shape (T,) or (T+1,) where rewards[t] corresponds to step t.
+            gamma: Discount factor for TD updates.
+            lambda_fwd: Forward trace decay (0=no memory, 1=full history).
+            lambda_bwd: Backward trace decay for combined TD(λ) update.
+            rho_init: Initial state (S,S). Defaults to self._rho1.
+            channel_idx: Which channel to use.
+
+        Returns:
+            Dict with:
+            - 'alpha': Forward messages, shape (T, S²)
+            - 'beta': Backward messages, shape (T, S²)
+            - 'Z': Marginal likelihoods Z_t = P(o_t | past), shape (T,)
+            - 'loglikelihood': Σ_t log Z_t
+            - 'V': Value estimates V(α_t) = Σ_μ w_μ α_t[μ], shape (T,)
+            - 'delta': TD errors δ_t, shape (T,)  [δ_t for t < T, 0 at t=T]
+            - 'e_forward': Forward eligibility traces e_t, shape (T, S²)
+            - 'e_backward': Backward eligibility traces e^b_t, shape (T, S²)
+            - 'e_combined': Combined traces e_t ⊙ β_t (for parameter updates)
+            - 'smoothing_posteriors': P(ρ_t | τ_{1:T}), shape (T, S²)
+            - 'rewards': The rewards used (log Z_t if not provided)
+        """
+        T = len(actions)
+        if T == 0:
+            return {
+                'alpha': np.zeros((0, self.S2)),
+                'beta': np.zeros((0, self.S2)),
+                'Z': np.zeros(0),
+                'loglikelihood': 0.0,
+                'V': np.zeros(0),
+                'delta': np.zeros(0),
+                'e_forward': np.zeros((0, self.S2)),
+                'e_backward': np.zeros((0, self.S2)),
+                'e_combined': np.zeros((0, self.S2)),
+                'smoothing_posteriors': np.zeros((0, self.S2)),
+                'rewards': np.zeros(0),
+            }
+
+        # Run forward-backward to get α, β, Z
+        fb_result = self.compute_forward_backward(
+            actions, outcomes, rho_init=rho_init, channel_idx=channel_idx
+        )
+        alpha = fb_result['alpha']
+        beta = fb_result['beta']
+        Z = fb_result['Z']
+        loglikelihood = fb_result['loglikelihood']
+        smoothing_posteriors = fb_result['smoothing_posteriors']
+
+        # Default rewards: log marginal likelihood (surprisal as intrinsic reward)
+        if rewards is None:
+            rewards = np.zeros(T + 1, dtype=np.float64)
+            # r_t = log Z_t (surprisal at step t)
+            # Z_t = P(o_t | past) so log Z_t is negative log-prob = surprisal
+            rewards[:T] = np.log(np.clip(Z, 1e-12, 1.0))
+        else:
+            rewards = np.asarray(rewards, dtype=np.float64)
+            if rewards.shape == (T,):
+                rewards = np.concatenate([rewards, np.zeros(1)])
+
+        # Value function weights: V(α) = Σ_μ α[μ] · w_μ
+        # Initialize w_μ to the log-likelihood of the forward posterior
+        # w is of shape (S²,) — one weight per OOM basis element
+        w = np.zeros(self.S2, dtype=np.float64)
+
+        # Initialize V using a simple average of log Z
+        V = np.zeros(T + 1, dtype=np.float64)
+        for t in range(T):
+            V[t] = np.sum(alpha[t] * w)  # V(α_t)
+
+        # Compute TD errors: δ_t = r_t + γ·V_{t+1} - V_t
+        # where V_{t+1} = V(α_{t+1}) for t < T
+        delta = np.zeros(T + 1, dtype=np.float64)
+        for t in range(T):
+            v_next = V[t + 1] if t + 1 <= T else 0.0
+            delta[t] = rewards[t] + gamma * v_next - V[t]
+
+        # Forward eligibility traces: e_t = γ·λ·e_{t-1} + α_t
+        # (tracks which states were recently visited with what magnitude)
+        e_forward = np.zeros((T, self.S2), dtype=np.float64)
+        e_t = np.zeros(self.S2, dtype=np.float64)
+        for t in range(T):
+            e_t = gamma * lambda_fwd * e_t + alpha[t]
+            e_forward[t] = e_t
+
+        # Backward eligibility traces (forward-view equivalent):
+        # Accumulates TD errors backwards through time
+        # e^b_t[μ] = α_t[μ] · |δ_t| + γ·λ_bwd · e^b_{t+1}[μ]
+        e_backward = np.zeros((T, self.S2), dtype=np.float64)
+        e_b_t = np.zeros(self.S2, dtype=np.float64)
+        for t in range(T - 1, -1, -1):
+            # Weight by absolute TD error magnitude (credit magnitude)
+            delta_weight = np.abs(delta[t])
+            # Also include the forward message magnitude for scale
+            e_b_t = alpha[t] * delta_weight + gamma * lambda_bwd * e_b_t
+            e_backward[t] = e_b_t
+
+        # Combined traces: e_combined[t] = e_forward[t] ⊙ normalize(e_backward[t])
+        # Scale backward traces to same order as forward traces
+        e_combined = np.zeros((T, self.S2), dtype=np.float64)
+        for t in range(T):
+            # Normalize backward trace to [0,1] range for combination
+            e_b_norm = e_backward[t]
+            if np.max(e_b_norm) > 1e-12:
+                e_b_norm = e_b_norm / np.max(e_b_norm)
+            e_combined[t] = e_forward[t] * e_b_norm
+
+        # Final value estimate for bootstrap (V_T)
+        V[T] = np.sum(alpha[-1] * w) if T > 0 else 0.0
+
+        return {
+            'alpha': alpha,
+            'beta': beta,
+            'Z': Z,
+            'loglikelihood': loglikelihood,
+            'V': V[:T],
+            'delta': delta[:T],
+            'e_forward': e_forward,
+            'e_backward': e_backward,
+            'e_combined': e_combined,
+            'smoothing_posteriors': smoothing_posteriors,
+            'rewards': rewards[:T],
+        }
+
+    def update_parameters_from_traces(
+        self,
+        traces_result: dict,
+        actions: np.ndarray,
+        outcomes: np.ndarray,
+        eta: float = 0.01,
+        gamma: float = 0.9,
+        lambda_bwd: float = 0.8,
+        channel_idx: int = 0,
+    ) -> dict:
+        r"""Apply parameter updates using TD(λ) eligibility traces.
+
+        Updates the OOM transition operators A(o,a,o',a') using the
+        accumulated eligibility traces and TD errors.
+
+        The update rule for each transition operator element A[μ,ν]:
+            ΔA[μ,ν] = η · Σ_t δ_t · e_t[μ]
+
+        This shifts the OOM dynamics to increase probability of
+        high-reward trajectories and decrease probability of low-reward ones.
+
+        Args:
+            traces_result: Output from compute_eligibility_traces().
+            actions: Action indices, shape (T,).
+            outcomes: Outcome indices, shape (T,).
+            eta: Learning rate for parameter updates.
+            gamma: Discount factor.
+            lambda_bwd: Backward trace decay.
+            channel_idx: Which channel to update.
+
+        Returns:
+            Dict with:
+            - 'delta_A_sum': Total parameter change magnitude per operator
+            - 'max_update': Maximum single element change
+            - 'mean_update': Mean element change
+        """
+        alpha = traces_result['alpha']
+        delta = traces_result['delta']
+        e_combined = traces_result['e_combined']
+        T = len(actions)
+
+        if T == 0:
+            return {'delta_A_sum': {}, 'max_update': 0.0, 'mean_update': 0.0}
+
+        # Compute parameter updates for each transition operator
+        ops = self.get_A_all(channel_idx=channel_idx)
+        delta_A_sum = {}
+
+        # For each (o,a,o',a') operator:
+        # ΔA[μ,ν] = η · Σ_t δ_t · e_combined[t,μ]
+        # (update proportional to TD error, weighted by combined trace)
+        for key, A in ops.items():
+            delta_A = np.zeros_like(A)
+            for t in range(T):
+                # Outer product: δ_t · e_combined[t] (additive update)
+                delta_A += eta * delta[t] * e_combined[t]
+            delta_A_sum[key] = float(np.sum(np.abs(delta_A)))
+
+            # Apply update: shift A in direction that increases high-reward prob
+            A += delta_A
+
+        total_updates = np.array(list(delta_A_sum.values()))
+        return {
+            'delta_A_sum': delta_A_sum,
+            'max_update': float(np.max(total_updates)) if len(total_updates) > 0 else 0.0,
+            'mean_update': float(np.mean(total_updates)) if len(total_updates) > 0 else 0.0,
+        }
+
     def __repr__(self) -> str:
         return f"OOMModel(S={self.S}, A={self.A}, O={self.O}, L={self.L})"
 
