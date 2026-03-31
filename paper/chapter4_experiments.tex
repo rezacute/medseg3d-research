@@ -72,11 +72,19 @@ underlying signal is a linear combination of basis functions.
 \index{Mackey-Glass}
 \begin{equation}
 \frac{dx}{dt} = \frac{0.2\, x(t-\tau)}{1 + x(t-\tau)^{10}} - 0.1\, x(t),
+\qquad \tau = 17,
 \end{equation}
-with $\tau=17$, integrated with Euler steps of $\Delta t = 1$. This
-produces a deterministic chaotic time series with a Kaplan-Yorke dimension
-of approximately 2.1. The task requires memory of $\tau$ steps and is a
-standard benchmark for reservoir computing \citep{jaeger2004harnessing}.
+discretized using forward Euler steps of $\Delta t = 1$:
+\index{Mackey-Glass!discrete version}
+\begin{equation}
+x_{t+1} = x_t + \Bigl[
+  \frac{0.2\, x_{t-\tau}}{1 + x_{t-\tau}^{10}} - 0.1\, x_t \Bigr],
+\qquad t = \tau, \ldots, T-1,
+\end{equation}
+with initial condition $x_0 = 1.5$ for $t < \tau$. This produces a
+deterministic chaotic time series with a Kaplan-Yorke dimension of
+approximately 2.1 and is a standard benchmark for reservoir computing
+\citep{jaeger2004harnessing, jaeger2007echo}.
 
 \index{chaotic time series}
 \index{Kaplan-Yorke dimension}
@@ -100,9 +108,9 @@ demand:
 \index{weekly pattern}
 \index{multi-scale}
 \begin{align}
-y_t ={} & 3.0\,\sin(2\pi t / (24\cdot 7))
-        + 2.0\,\sin(2\pi t / 24) \bigr) \bigr) \bigr) \bigr) \bigr) \bigr) \bigr) \bigr) \bigr) \bigr) \bigr) \\
-        & + 1.5\,\sin(2\pi t / 24) + 2.0\,\exp\!\Bigl(-\frac{(t \bmod 24 - 9)^2}{8}\Bigr)
+y_t ={} & 3.0\,\sin\!\Bigl(\frac{2\pi t}{24\cdot 7}\Bigr)
+        + 1.5\,\sin\!\Bigl(\frac{2\pi t}{24}\Bigr)
+        + 2.0\,\exp\!\Bigl(-\frac{(t \bmod 24 - 9)^2}{8}\Bigr)
         + \epsilon_t,
 \end{align}
 with Gaussian noise $\epsilon_t \sim \mathcal{N}(0, 0.2^2)$. This combines
@@ -119,14 +127,26 @@ real EV charging profiles.
 
 \textbf{ACN-Data (Palo Alto).} The Adaptive Charging Network dataset
 \citep{acaroglu2022acn} records EV charging sessions from the Palo Alto
-network. We aggregate sessions by hour, computing the total energy
-delivered per hour (kWh), yielding a time series of aggregate charging
-load. The data exhibits strong daily and weekly periodicities, weekday/weekend
-differences, and occasional spikes corresponding to fleet charging events.
-The series is normalized to the $[0,1]$ range before processing.
+network. We preprocess the data in three steps: (1) session aggregation
+by hour, summing total energy delivered (kWh) across all sessions in
+each hour; (2) outlier removal, flagging and discarding hours with
+zero sessions (equipment downtime) and hours with demand $> 3\sigma$
+above the rolling 7-day mean (fleet charging spikes); (3) normalization
+to $[0,1]$ using min-max scaling over the training set, with test-set
+values clipped to $[0,1]$ to prevent extrapolation artifacts.
 
+\index{ACN-Data!preprocessing}
+\index{outlier removal}
+\index{min-max scaling}
 \index{time series!aggregation}
 \index{daily periodicity}
+
+The resulting series exhibits strong daily periodicity (peak demand at
+approximately 9:00 AM and 6:00 PM), a pronounced weekday/weekend
+difference (weekday peaks 40\% higher on average), and autocorrelations
+significant up to lag 48 hours. This structure makes the series well-suited
+to linear regression on lagged features but challenging for models that
+must learn the nonlinear relationship between state and demand.
 
 % =============================================================================
 % §4.2  Baselines

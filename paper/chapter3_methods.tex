@@ -323,14 +323,15 @@ The TD($\lambda$) module is implemented in
 The \textbf{forward trace} is accumulated simultaneously with the forward
 pass:
 \index{forward trace}
-\begin{verbatim}
-e = zeros(S2)
-for t in 0..T-1:
-    e = gamma * lambda_fwd * e + alpha[t]
-    e_forward[t] = e
-\end{verbatim}
+\begin{algorithmic}
+\State $e \leftarrow \mathbf{0}_{S^2}$
+\For{$t = 0,\ldots,T-1$}
+  \State $e \leftarrow \gamma\,\lambda_{\mathrm{fwd}}\,e + \alpha_t$
+  \State $e_{\mathrm{forward}}[t] \leftarrow e$
+\EndFor
+\end{algorithmic}
 At each timestep, the current forward message $\alpha_t$ is added to the
-decaying trace, implementing the accumulating trace trace
+decaying trace, implementing the accumulating trace
 \citep{sutton2000review}.
 
 \index{accumulating trace}
@@ -338,12 +339,13 @@ decaying trace, implementing the accumulating trace trace
 The \textbf{backward trace} is accumulated in a second pass over the
 trajectory (after the backward pass has computed $\beta_t$):
 \index{backward trace}
-\begin{verbatim}
-e_b = zeros(S2)
-for t in T-1..0:
-    e_b = alpha[t] * |delta[t]| + gamma * lambda_bwd * e_b
-    e_backward[t] = e_b
-\end{verbatim}
+\begin{algorithmic}
+\State $e_b \leftarrow \mathbf{0}_{S^2}$
+\For{$t = T-1,\ldots,0$}
+  \State $e_b \leftarrow \alpha_t \odot |\delta_t| + \gamma\,\lambda_{\mathrm{bwd}}\,e_b$
+  \State $e_{\mathrm{backward}}[t] \leftarrow e_b$
+\EndFor
+\end{algorithmic}
 The weight $|\delta_t|$ focuses the trace on timesteps with large
 prediction errors, concentrating credit assignment where it matters most.
 
@@ -364,11 +366,12 @@ The \textbf{parameter update} applies the combined trace to shift the
 OOM transition operators:
 \index{parameter update!OOM}
 \index{transition operator!update}
-\begin{verbatim}
-for key, A in ops.items():
-    delta_A = sum_t(eta * delta[t] * e_combined[t])
-    A += delta_A
-\end{verbatim}
+\begin{algorithmic}
+\For{$(o,a,o',a') \in \mathcal{O} \times \mathcal{A} \times \mathcal{O} \times \mathcal{A}$}
+  \State $\Delta A^{(o,a,o',a')} \leftarrow \eta \sum_{t=0}^{T-1} \delta_t\, e^{\mathrm{comb}}_t$
+  \State $A^{(o,a,o',a')} \leftarrow A^{(o,a,o',a')} + \Delta A^{(o,a,o',a')}$
+\EndFor
+\end{algorithmic}
 Because the combined trace does not depend on the specific operator
 $A^{(o,a,o',a')}$ (only on the forward message and TD error), the
 update applies uniformly across all operators. This is a limitation:
