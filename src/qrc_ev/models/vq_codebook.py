@@ -155,6 +155,8 @@ class HilbertSchmidtVQ(nn.Module):
             indices: (optional) argmin indices, shape (B*T,)
         """
         B = rho_flat.shape[0]
+        # Ensure rho_flat is on the same device as codebook (reservoir may return CPU)
+        rho_flat = rho_flat.to(self.codebook.device)
 
         # ─── HS distance: (B, K) ───────────────────────────────────────────────
         dists_sq = batched_hs_distance_sq(rho_flat, self.codebook)  # (B, K)
