@@ -342,9 +342,10 @@ def build_objective(
         R_tr = build_reservoir_features(X_tr, seed=seed_base)
         R_va = build_reservoir_features(X_va, seed=seed_base + 1)
 
-        # ─── Discretize ──────────────────────────────────────────────────────
-        outcomes_tr, bin_edges = discretize(R_tr, n_outcomes)
-        outcomes_va, _         = discretize(R_va, n_outcomes)
+        # ─── Discretize — use first reservoir feature as the outcome signal ─
+        # R has shape (T, d*3); outcomes_raw must be 1D (one symbol per timestep)
+        outcomes_tr, bin_edges = discretize(R_tr[:, 0], n_outcomes)
+        outcomes_va, _         = discretize(R_va[:, 0], n_outcomes)
 
         # Actions: default to 0 (all same action — pure prediction mode)
         actions_tr = np.zeros(len(outcomes_tr), dtype=np.int32)
