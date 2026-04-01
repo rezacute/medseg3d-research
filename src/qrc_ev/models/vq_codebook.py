@@ -91,23 +91,26 @@ class HilbertSchmidtVQ(nn.Module):
         dtype = rho_flat.dtype
         device = rho_flat.device
 
+        # Work on CPU tensors throughout k-means (memory-safe for large N)
+        rho_cpu = rho_flat.cpu()
+
         # k-means++ initialization
         rng = np.random.default_rng(seed)
         idx = rng.integers(0, N)
-        centers = [rho_flat[idx].cpu().numpy()]
+        centers = [rho_cpu[idx].numpy()]
         for _ in range(1, self.k):
-            dists_sq = self._compute_dists_sq_cpu(rho_flat.cpu(), torch.tensor(centers))
+            dists_sq = self._compute_dists_sq_cpu(rho_cpu, torch.tensor(centers))
             prob = dists_sq.min(dim=1).values.cpu().numpy()
             prob = prob / prob.sum()
             idx = rng.choice(N, p=prob)
-            centers.append(rho_flat[idx].cpu().numpy())
-        centers = torch.tensor(np.array(centers), dtype=dtype, device=device)
+            centers.append(rho_cpu[idx].numpy())
+        centers = torch.tensor(np.array(centers), dtype=dtype)
 
         # Lloyd's algorithm
         inertia_prev = float("inf")
         for it in range(n_iters):
-            dists_sq = self._compute_dists_sq_cpu(rho_flat.cpu(), centers)
-            labels = dists_sq.argmin(axis=1)  # (N,)
+            dists_sq = self._compute_dists_sq_cpu(rho_cpu, centers)
+            labels = dists_sq.argmin(dim=1)  # (N,)
             inertia = dists_sq.min(dim=1).values.sum().item()
 
             if abs(inertia - inertia_prev) / max(inertia_prev, 1e-8) < tol:
@@ -119,7 +122,7 @@ class HilbertSchmidtVQ(nn.Module):
             counts = torch.zeros(self.k)
             for i in range(N):
                 k = labels[i].item()
-                new_centers[k] += rho_flat[i].cpu()
+                new_centers[k] += rho_cpu[i]
                 counts[k] += 1
             for kk in range(self.k):
                 if counts[kk] > 0:
@@ -129,6 +132,9 @@ class HilbertSchmidtVQ(nn.Module):
 
     def _compute_dists_sq_cpu(self, rho: torch.Tensor, centers: torch.Tensor) -> torch.Tensor:
         """Memory-safe HS distance on CPU (for k-means fitting)."""
+        # Ensure both on same device
+        if rho.device != centers.device:
+            centers = centers.to(rho.device)
         rho_sq = torch.einsum("bi,bi->b", rho, rho)
         cb_sq = torch.einsum("ki,ki->k", centers, centers)
         cross = 2 * torch.einsum("bi,ki->bk", rho, centers)

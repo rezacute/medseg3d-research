@@ -162,7 +162,7 @@ def run_single_config(
         def forward(self, X_in):
             out = self.feat_proj(X_in.to(self.device))
             noise = torch.randn_like(out) * 0.01
-            return (out + noise).cpu()
+            return out + noise  # stays on self.device
         def process_sequence(self, X_in):
             return self.forward(X_in)
         def process_batch(self, x):
