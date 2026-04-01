@@ -211,7 +211,8 @@ def discretize(outcomes_raw: np.ndarray, n_outcomes: int) -> tuple:
     Discretize continuous reservoir outcomes to integer symbols via quantile binning.
     Returns: outcomes (int array), bin_edges
     """
-    outcomes_raw_1d = outcomes_raw[:, 0]  # use first reservoir dimension
+    # Flatten to 1D — np.digitize returns 2D if input is 2D
+    outcomes_raw_1d = np.asarray(outcomes_raw).ravel()
     bin_edges = np.percentile(outcomes_raw_1d, np.linspace(0, 100, n_outcomes + 1))
     bin_edges[0] = -np.inf
     bin_edges[-1] = np.inf
