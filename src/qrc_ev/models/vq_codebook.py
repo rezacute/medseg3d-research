@@ -97,8 +97,8 @@ class HilbertSchmidtVQ(nn.Module):
         centers = [rho_flat[idx].cpu().numpy()]
         for _ in range(1, self.k):
             dists_sq = self._compute_dists_sq_cpu(rho_flat.cpu(), torch.tensor(centers))
-            prob = dists_sq.min(axis=1)
-            prob /= prob.sum()
+            prob = dists_sq.min(dim=1).values.cpu().numpy()
+            prob = prob / prob.sum()
             idx = rng.choice(N, p=prob)
             centers.append(rho_flat[idx].cpu().numpy())
         centers = torch.tensor(np.array(centers), dtype=dtype, device=device)
@@ -108,7 +108,7 @@ class HilbertSchmidtVQ(nn.Module):
         for it in range(n_iters):
             dists_sq = self._compute_dists_sq_cpu(rho_flat.cpu(), centers)
             labels = dists_sq.argmin(axis=1)  # (N,)
-            inertia = dists_sq.min(axis=1).sum().item()
+            inertia = dists_sq.min(dim=1).values.sum().item()
 
             if abs(inertia - inertia_prev) / max(inertia_prev, 1e-8) < tol:
                 break

@@ -34,8 +34,28 @@ from torch.utils.data import DataLoader, TensorDataset
 SRC_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(SRC_ROOT))
 
-from qrc_ev.data.ev_datasets import load_dataset
+from qrc_ev.data.ev_datasets import load_dataset as load_ev_dataset
 from qrc_ev.models.vq_codebook import HilbertSchmidtVQ, VQHMMModel
+
+# Synthetic datasets (same as HPO script)
+SYnth_DS = {
+    "narma10":      dict(n_lags=24, n_points=5000),
+    "mackey_glass": dict(n_lags=30, n_points=5000),
+}
+_EV_NAMES = {"palo_alto_ev", "boulder_ev", "acn_sfo", "dundee_ev"}
+
+
+def _load_series(name: str) -> np.ndarray:
+    """Load a dataset by name, handling both synthetic and EV sources."""
+    if name in _EV_NAMES:
+        import warnings; warnings.filterwarnings("ignore")
+        d = load_ev_dataset(name)
+        return d["train"].astype(np.float32)
+    cfg = SYnth_DS[name]
+    from qrc_ev.experiments.qhmm_hpo_fixed import DATASETS
+    ds = DATASETS[name]
+    series = ds["generate"](cfg["n_points"])
+    return series.astype(np.float32)
 
 
 # =============================================================================
@@ -54,8 +74,7 @@ def run_single_config(
     np.random.seed(seed)
 
     # ─── Load data ──────────────────────────────────────────────────────────
-    data = load_dataset(dataset_name)
-    series = data["train"].astype(np.float32)
+    series = _load_series(dataset_name)
     T = len(series)
 
     # ─── Feature construction (same as ablation_study.py) ──────────────────
@@ -125,23 +144,32 @@ def run_single_config(
         device=device,
     )
 
-    # Attach a mock reservoir that projects features to vq_dim
-    vq_dim = vq_model.vq_dim
-    feat_proj = nn.Linear(X_tr_t.shape[1], vq_dim, bias=False).to(device)
-    feat_proj.weight.data = torch.eye(X_tr_t.shape[1], vq_dim)  # identity for now
+    # Attach a mock reservoir that projects features to vq_dim (matches encode() expectation)
+    # Must be nn.Module so .to(device) recursively moves its parameters
+    # encode() does: rho_flat = reservoir.process_sequence(X); then
+    #   if vq_dim < rho_flat.shape[-1]: rho_flat = rho_flat[:, :vq_dim]
+    #   else: no-op (returns reservoir output directly)
+    # So we output vq_dim dims → encode() returns (T, vq_dim) with no slicing
+    reservoir_dim = vq_model.vq_dim
 
-    # Mock reservoir: just project + add small noise (proxy for real quantum reservoir)
-    def mock_reservoir_sequence(X_in):
-        out = feat_proj(X_in.to(device))
-        # Add small per-timestep noise to simulate quantum state variation
-        noise = torch.randn_like(out) * 0.01
-        return (out + noise).cpu()
+    class MockReservoir(nn.Module):
+        def __init__(self, in_dim, out_dim, device):
+            super().__init__()
+            self.feat_proj = nn.Linear(in_dim, out_dim, bias=False)
+            # nn.Linear stores weight as (out_features, in_features)
+            nn.init.eye_(self.feat_proj.weight)
+            self.device = device
+        def forward(self, X_in):
+            out = self.feat_proj(X_in.to(self.device))
+            noise = torch.randn_like(out) * 0.01
+            return (out + noise).cpu()
+        def process_sequence(self, X_in):
+            return self.forward(X_in)
+        def process_batch(self, x):
+            return self.process_sequence(x[0])
 
-    vq_model.reservoir = type("obj", (object,), {
-        "process_sequence": mock_reservoir_sequence,
-        "process_batch": lambda x: mock_reservoir_sequence(x[0]),
-    })()
-
+    reservoir = MockReservoir(X_tr_t.shape[1], reservoir_dim, device)
+    vq_model.reservoir = reservoir  # plain assignment; .to() recurses into nn.Module attrs
     vq_model = vq_model.to(device)
 
     # ─── K-means initialization ───────────────────────────────────────────
@@ -212,8 +240,8 @@ def run_single_config(
             preds = [cluster_means.get(i.item(), y_val_s.mean()) for i in val_indices]
             preds = np.array(preds)
 
-            val_r2 = 1 - np.sum((y_val_s.numpy() - preds) ** 2) / (
-                np.sum((y_val_s.numpy() - y_val_s.mean()) ** 2) + 1e-8
+            val_r2 = 1 - np.sum((y_val_s - preds) ** 2) / (
+                np.sum((y_val_s - y_val_s.mean()) ** 2) + 1e-8
             )
 
         if val_r2 > best_val_r2:
@@ -226,8 +254,7 @@ def run_single_config(
             break
 
     # ─── Cleanup ───────────────────────────────────────────────────────────
-    del vq_model, feat_proj
-    del rho_init, rho_flat, z_q
+    del vq_model, rho_init, rho_flat, z_q
     torch.cuda.empty_cache()
     torch.cuda.ipc_collect() if device == "cuda" else None
     gc.collect()
@@ -249,9 +276,9 @@ def build_configs() -> List[Dict[str, Any]]:
     k_values = [4, 8, 16]
     dim_values = [16, 32, 64]
     ema_decays = [0.95, 0.99]
-    datasets = ["narma10", "ev_palo_alto", "boulder_ev"]
+    datasets = ["narma10", "mackey_glass", "palo_alto_ev", "boulder_ev"]
     seeds = [42, 43, 44, 45, 46]
-    n_qubits = [6]  # fixed for sweep, VQ overhead is in k and dim
+    n_qubits = [32]  # must be >= 32 so reservoir output (2*nq=64) >= vq_dim=64
 
     configs = []
     for k, dim, decay, dataset, seed, nq in product(
