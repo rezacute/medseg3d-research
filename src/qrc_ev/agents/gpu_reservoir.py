@@ -44,6 +44,8 @@ class GPUQuantumReservoir:
         self._weights_t = torch.from_numpy(self._weights).float().to(self.device)
         self._biases_t = torch.from_numpy(self._biases).float().to(self.device)
         self._dim = 2 ** n_qubits
+        # Input scaling to keep angles in linear regime
+        self._input_scale = 1.0 / max(n_features, 1)
 
     def _compute_angles(self, x: np.ndarray) -> np.ndarray:
         # Scale input to keep angles in linear regime
